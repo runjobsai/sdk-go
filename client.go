@@ -13,11 +13,12 @@ const defaultBaseURL = "http://localhost:8081"
 // chat completions and provides additional services for models, images, audio,
 // and video.
 type Client struct {
-	Chat   *openai.ChatCompletionService
-	Models *ModelService
-	Image  *ImageService
-	Audio  *AudioService
-	Video  *VideoService
+	Chat     *openai.ChatCompletionService
+	Models   *ModelService
+	Image    *ImageService
+	Audio    *AudioService
+	Video    *VideoService
+	Computer *ComputerService
 
 	baseURL    string
 	apiKey     string
@@ -58,5 +59,6 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 	c.Image = &ImageService{client: c}
 	c.Audio = &AudioService{client: c}
 	c.Video = &VideoService{client: c}
+	c.Computer = &ComputerService{client: c}
 	return c
 }

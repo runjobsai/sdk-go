@@ -2,7 +2,8 @@
 //
 // It composes the [openai-go] SDK for chat completions and extends it with
 // gateway-specific services: model catalog with pricing, image generation
-// and editing, text-to-speech, speech-to-text, and async video generation.
+// and editing, text-to-speech, speech-to-text, async video generation,
+// and computer use (AI GUI control).
 //
 // # Quick Start
 //
@@ -23,6 +24,7 @@
 //	img, _    := client.Image.Generate(ctx, "MiniMax Image-01", runjobs.ImageGenerateParams{...})
 //	speech, _ := client.Audio.Speech(ctx, "OpenAI/TTS", runjobs.SpeechParams{...})
 //	task, _   := client.Video.Generate(ctx, "MiniMax Hailuo 2.3", runjobs.VideoGenerateParams{...})
+//	step, _   := client.Computer.Step(ctx, "AI Control", runjobs.ComputerStepParams{...})
 //
 // # Error Handling
 //

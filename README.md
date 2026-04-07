@@ -152,6 +152,34 @@ if status.Status == "succeeded" {
 }
 ```
 
+### Computer Use (AI GUI Control)
+
+```go
+// Execute one step of a computer-use agent loop
+step, _ := client.Computer.Step(ctx, "AI Control", runjobs.ComputerStepParams{
+    Messages: []map[string]any{
+        {
+            "role": "user",
+            "content": "Open the browser and go to example.com",
+        },
+    },
+    DisplayWidth:  1920,
+    DisplayHeight: 1080,
+})
+
+// Inspect the model's actions
+for _, block := range step.Content {
+    switch block.Type {
+    case "text":
+        fmt.Println("Text:", block.Text)
+    case "tool_use":
+        fmt.Printf("Action: %s %v\n", block.Name, block.Input)
+    case "computer_call":
+        fmt.Printf("Call: %s %v\n", block.CallID, block.Action)
+    }
+}
+```
+
 ## Error Handling
 
 All errors — including gateway-specific endpoints — use `*openai.Error`:
@@ -172,6 +200,7 @@ if errors.As(err, &apiErr) {
 | `client.Image` | `Generate`, `Edit` | Image generation and editing |
 | `client.Audio` | `Speech`, `Transcribe` | Text-to-speech and speech-to-text |
 | `client.Video` | `Generate`, `GetStatus`, `Wait`, `GetContent` | Async video generation |
+| `client.Computer` | `Step` | Computer use (AI GUI control) |
 
 ## License
 
