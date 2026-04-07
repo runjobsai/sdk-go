@@ -90,7 +90,15 @@ type ChatCompletionParams struct {
 	N                *int          `json:"n,omitempty"`
 	Tools            []ChatTool    `json:"tools,omitempty"`
 	ToolChoice       any           `json:"tool_choice,omitempty"`
+	User             string        `json:"user,omitempty"`
+	Metadata         map[string]any `json:"metadata,omitempty"`
 	Stream           bool          `json:"stream,omitempty"`
+	StreamOptions    *StreamOptions `json:"stream_options,omitempty"`
+}
+
+// StreamOptions configures streaming behaviour.
+type StreamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 // ChatTool describes a tool available to the model.
@@ -142,9 +150,11 @@ func (m ChatChoiceMessage) ContentString() string {
 }
 
 // ChatToolCall represents a tool call made by the model.
+// In streaming deltas, Index identifies which tool call a fragment belongs to.
 type ChatToolCall struct {
-	ID       string               `json:"id"`
-	Type     string               `json:"type"`
+	Index    int                  `json:"index,omitempty"`
+	ID       string               `json:"id,omitempty"`
+	Type     string               `json:"type,omitempty"`
 	Function ChatToolCallFunction `json:"function"`
 }
 
@@ -300,8 +310,13 @@ func (s *ChatService) NewStreamingRaw(ctx context.Context, body json.RawMessage)
 }
 
 // NewStreaming creates a streaming chat completion, returning a Stream iterator.
+// Automatically sets stream=true and stream_options.include_usage=true so the
+// final chunk includes token/cost information.
 func (s *ChatService) NewStreaming(ctx context.Context, params ChatCompletionParams) *Stream {
 	params.Stream = true
+	if params.StreamOptions == nil {
+		params.StreamOptions = &StreamOptions{IncludeUsage: true}
+	}
 
 	stream := &Stream{}
 

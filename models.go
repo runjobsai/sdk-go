@@ -10,6 +10,7 @@ type Model struct {
 	ID                 string         `json:"id"`
 	Object             string         `json:"object"`
 	Capability         string         `json:"capability"`
+	Provider           string         `json:"provider,omitempty"`
 	Options            map[string]any `json:"options,omitempty"`
 	InputPricePerMTok  int64          `json:"input_price_per_mtok"`
 	OutputPricePerMTok int64          `json:"output_price_per_mtok"`
