@@ -29,7 +29,8 @@ type ComputerStepParams struct {
 	PreviousResponseID string `json:"previous_response_id,omitempty"`
 
 	// OpenAIInput is a follow-up computer_call_output for OpenAI's Responses API.
-	OpenAIInput any `json:"openai_input,omitempty"`
+	OpenAIInput any    `json:"openai_input,omitempty"`
+	User        string `json:"user,omitempty"`
 }
 
 // ComputerResponse contains the model's action plan for this step.

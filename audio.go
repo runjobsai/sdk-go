@@ -21,6 +21,7 @@ type SpeechParams struct {
 	Voice          string  `json:"voice"`
 	ResponseFormat string  `json:"response_format,omitempty"`
 	Speed          float64 `json:"speed,omitempty"`
+	User           string  `json:"user,omitempty"`
 }
 
 // SpeechResponse holds the result of a text-to-speech request.
@@ -38,6 +39,7 @@ type TranscribeParams struct {
 	Prompt                  string    `json:"prompt,omitempty"`
 	ResponseFormat          string    `json:"response_format,omitempty"`
 	TimestampGranularities  []string  `json:"timestamp_granularities,omitempty"`
+	User                    string    `json:"user,omitempty"`
 }
 
 // TranscribeResponse holds the result of an audio transcription request.
@@ -113,6 +115,11 @@ func (s *AudioService) Transcribe(ctx context.Context, model string, params Tran
 	}
 	for _, tg := range params.TimestampGranularities {
 		if err := w.WriteField("timestamp_granularities[]", tg); err != nil {
+			return nil, err
+		}
+	}
+	if params.User != "" {
+		if err := w.WriteField("user", params.User); err != nil {
 			return nil, err
 		}
 	}

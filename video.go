@@ -20,6 +20,7 @@ type VideoGenerateParams struct {
 	GenerateAudio bool   `json:"generate_audio,omitempty"`
 	FirstFrameB64 string `json:"first_frame_b64,omitempty"`
 	LastFrameB64  string `json:"last_frame_b64,omitempty"`
+	User          string `json:"user,omitempty"`
 }
 
 // VideoTask is the response from a video generation request.

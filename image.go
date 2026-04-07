@@ -19,7 +19,9 @@ type ImageGenerateParams struct {
 	N                  int      `json:"n,omitempty"`
 	Quality            string   `json:"quality,omitempty"`
 	Style              string   `json:"style,omitempty"`
+	ResponseFormat     string   `json:"response_format,omitempty"`
 	ReferenceImageURLs []string `json:"reference_image_urls,omitempty"`
+	User               string   `json:"user,omitempty"`
 }
 
 // ImageResponse is the response from an image generation or edit request.
@@ -37,13 +39,15 @@ type ImageResult struct {
 
 // ImageEditParams configures an image edit request.
 type ImageEditParams struct {
-	Image         io.Reader `json:"-"`
-	ImageFilename string    `json:"-"`
-	Mask          io.Reader `json:"-"`
-	MaskFilename  string    `json:"-"`
-	Prompt        string    `json:"prompt"`
-	Size          string    `json:"size,omitempty"`
-	N             int       `json:"n,omitempty"`
+	Image          io.Reader `json:"-"`
+	ImageFilename  string    `json:"-"`
+	Mask           io.Reader `json:"-"`
+	MaskFilename   string    `json:"-"`
+	Prompt         string    `json:"prompt"`
+	Size           string    `json:"size,omitempty"`
+	N              int       `json:"n,omitempty"`
+	ResponseFormat string    `json:"response_format,omitempty"`
+	User           string    `json:"user,omitempty"`
 }
 
 // Generate creates images from a text prompt.
@@ -85,6 +89,16 @@ func (s *ImageService) Edit(ctx context.Context, model string, params ImageEditP
 		}
 		if params.N > 0 {
 			if err = mw.WriteField("n", fmt.Sprintf("%d", params.N)); err != nil {
+				return
+			}
+		}
+		if params.ResponseFormat != "" {
+			if err = mw.WriteField("response_format", params.ResponseFormat); err != nil {
+				return
+			}
+		}
+		if params.User != "" {
+			if err = mw.WriteField("user", params.User); err != nil {
 				return
 			}
 		}
