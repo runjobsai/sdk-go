@@ -17,7 +17,7 @@ type VideoGenerateParams struct {
 	AspectRatio   string `json:"aspect_ratio,omitempty"`
 	Duration      int    `json:"duration,omitempty"`
 	Resolution    string `json:"resolution,omitempty"`
-	GenerateAudio bool   `json:"generate_audio,omitempty"`
+	GenerateAudio *bool  `json:"generate_audio,omitempty"`
 	FirstFrameB64 string `json:"first_frame_b64,omitempty"`
 	LastFrameB64  string `json:"last_frame_b64,omitempty"`
 	User          string `json:"user,omitempty"`
