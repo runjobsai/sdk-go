@@ -7,21 +7,38 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/openai/openai-go/v3"
 )
+
+// newJSONRequest builds an authenticated JSON POST request.
+func (c *Client) newJSONRequest(ctx context.Context, method, path string, body any) (*http.Request, error) {
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("runjobs: marshal request: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(buf))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	return req, nil
+}
+
+// readError reads the response body and constructs an *APIError.
+func (c *Client) readError(_ *http.Request, resp *http.Response) error {
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("runjobs: read error body: %w", err)
+	}
+	return c.makeError(resp, data)
+}
 
 // doJSON sends a JSON POST request to the given path, decoding the response into dst.
 func (c *Client) doJSON(ctx context.Context, path string, body any, dst any) error {
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return fmt.Errorf("runjobs: marshal request: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(buf))
+	req, err := c.newJSONRequest(ctx, http.MethodPost, path, body)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
 	return c.do(req, dst)
 }
 
@@ -57,7 +74,7 @@ func (c *Client) doRaw(ctx context.Context, method, path string, body io.Reader,
 		return nil, "", err
 	}
 	if resp.StatusCode >= 400 {
-		return nil, "", c.makeError(req, resp, data)
+		return nil, "", c.makeError(resp, data)
 	}
 	return data, resp.Header.Get("Content-Type"), nil
 }
@@ -87,7 +104,7 @@ func (c *Client) do(req *http.Request, dst any) error {
 		return err
 	}
 	if resp.StatusCode >= 400 {
-		return c.makeError(req, resp, data)
+		return c.makeError(resp, data)
 	}
 	if dst != nil {
 		if err := json.Unmarshal(data, dst); err != nil {
@@ -97,20 +114,16 @@ func (c *Client) do(req *http.Request, dst any) error {
 	return nil
 }
 
-// makeError constructs an *openai.Error from a failed HTTP response.
-// The gateway returns {"error": "message"} on failure.
-func (c *Client) makeError(req *http.Request, resp *http.Response, body []byte) error {
+// makeError constructs an *APIError from a failed HTTP response.
+func (c *Client) makeError(resp *http.Response, body []byte) error {
 	var payload struct {
 		Error string `json:"error"`
 	}
 	_ = json.Unmarshal(body, &payload)
 
-	apiErr := openai.Error{
+	return &APIError{
+		StatusCode: resp.StatusCode,
 		Type:       "gateway_error",
 		Message:    payload.Error,
-		StatusCode: resp.StatusCode,
-		Request:    req,
-		Response:   resp,
 	}
-	return &apiErr
 }

@@ -1,19 +1,12 @@
 package runjobs
 
-import (
-	"net/http"
-
-	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/option"
-)
+import "net/http"
 
 const defaultBaseURL = "http://localhost:8081"
 
-// Client is the top-level RunJobs SDK client. It wraps the OpenAI client for
-// chat completions and provides additional services for models, images, audio,
-// and video.
+// Client is the top-level RunJobs SDK client.
 type Client struct {
-	Chat     *openai.ChatCompletionService
+	Chat     *ChatService
 	Models   *ModelService
 	Image    *ImageService
 	Audio    *AudioService
@@ -46,15 +39,7 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 		o(c)
 	}
 
-	oaiOpts := []option.RequestOption{
-		option.WithAPIKey(apiKey),
-		option.WithBaseURL(c.baseURL + "/v1/"),
-	}
-	if c.httpClient != http.DefaultClient {
-		oaiOpts = append(oaiOpts, option.WithHTTPClient(c.httpClient))
-	}
-	oai := openai.NewClient(oaiOpts...)
-	c.Chat = &oai.Chat.Completions
+	c.Chat = &ChatService{client: c}
 	c.Models = &ModelService{client: c}
 	c.Image = &ImageService{client: c}
 	c.Audio = &AudioService{client: c}

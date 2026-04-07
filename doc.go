@@ -1,9 +1,8 @@
 // Package runjobs provides a Go client for the RunJobs AI Gateway.
 //
-// It composes the [openai-go] SDK for chat completions and extends it with
-// gateway-specific services: model catalog with pricing, image generation
-// and editing, text-to-speech, speech-to-text, async video generation,
-// and computer use (AI GUI control).
+// It provides services for chat completions (OpenAI-compatible), model catalog
+// with pricing, image generation and editing, text-to-speech, speech-to-text,
+// async video generation, and computer use (AI GUI control).
 //
 // # Quick Start
 //
@@ -11,11 +10,11 @@
 //	    runjobs.WithBaseURL("https://api.runjobs.ai"),
 //	)
 //
-//	// Chat — uses openai-go directly
-//	resp, err := client.Chat.New(ctx, openai.ChatCompletionNewParams{
-//	    Model:    "Claude Haiku 4.5",
-//	    Messages: []openai.ChatCompletionMessageParamUnion{
-//	        openai.UserMessage("Hello!"),
+//	// Chat
+//	resp, err := client.Chat.New(ctx, runjobs.ChatCompletionParams{
+//	    Model: "Claude Haiku 4.5",
+//	    Messages: []runjobs.ChatMessage{
+//	        {Role: "user", Content: "Hello!"},
 //	    },
 //	})
 //
@@ -28,13 +27,10 @@
 //
 // # Error Handling
 //
-// All errors — including gateway-specific endpoints — are returned as
-// [*openai.Error], so callers can use a single [errors.As] pattern:
+// All errors from the gateway are returned as [*APIError]:
 //
-//	var apiErr *openai.Error
+//	var apiErr *runjobs.APIError
 //	if errors.As(err, &apiErr) {
 //	    fmt.Println(apiErr.StatusCode, apiErr.Message)
 //	}
-//
-// [openai-go]: https://github.com/openai/openai-go
 package runjobs

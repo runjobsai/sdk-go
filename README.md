@@ -1,6 +1,6 @@
 # RunJobs SDK for Go
 
-Go client for the [RunJobs AI Gateway](https://github.com/runjobsai/ai-gateway). Extends [openai-go](https://github.com/openai/openai-go) with gateway-specific services.
+Go client for the [RunJobs AI Gateway](https://github.com/runjobsai/ai-gateway). Zero external dependencies.
 
 ## Install
 
@@ -18,7 +18,6 @@ import (
     "errors"
     "fmt"
 
-    "github.com/openai/openai-go/v3"
     runjobs "github.com/runjobsai/sdk-go"
 )
 
@@ -28,21 +27,21 @@ func main() {
     )
     ctx := context.Background()
 
-    // Chat (openai-go native — streaming also available via NewStreaming)
-    resp, err := client.Chat.New(ctx, openai.ChatCompletionNewParams{
+    resp, err := client.Chat.New(ctx, runjobs.ChatCompletionParams{
         Model: "Claude Haiku 4.5",
-        Messages: []openai.ChatCompletionMessageParamUnion{
-            openai.UserMessage("Hello!"),
+        Messages: []runjobs.ChatMessage{
+            {Role: "user", Content: "Hello!"},
         },
     })
     if err != nil {
-        var apiErr *openai.Error
+        var apiErr *runjobs.APIError
         if errors.As(err, &apiErr) {
             fmt.Printf("API error %d: %s\n", apiErr.StatusCode, apiErr.Message)
         }
         return
     }
     fmt.Println(resp.Choices[0].Message.Content)
+    fmt.Printf("Cost: $%.6f\n", resp.Usage.TotalCost)
 }
 ```
 
@@ -53,7 +52,6 @@ func main() {
 List available models with pricing and capability metadata.
 
 ```go
-// All models
 models, _ := client.Models.List(ctx)
 
 // Filter by capability
@@ -67,30 +65,38 @@ for _, m := range textModels {
 
 ### Chat
 
-Direct passthrough to `openai-go` — supports both streaming and non-streaming.
+Supports both streaming and non-streaming, using OpenAI-compatible format.
 
 ```go
 // Non-streaming
-resp, _ := client.Chat.New(ctx, openai.ChatCompletionNewParams{
-    Model:    "Claude Sonnet 4.6",
-    Messages: []openai.ChatCompletionMessageParamUnion{
-        openai.UserMessage("Explain Go interfaces in one sentence."),
+resp, _ := client.Chat.New(ctx, runjobs.ChatCompletionParams{
+    Model: "Claude Sonnet 4.6",
+    Messages: []runjobs.ChatMessage{
+        {Role: "user", Content: "Explain Go interfaces in one sentence."},
     },
 })
+fmt.Println(resp.Choices[0].Message.Content)
+fmt.Printf("Cost: $%.6f\n", resp.Usage.TotalCost)
 
 // Streaming
-stream := client.Chat.NewStreaming(ctx, openai.ChatCompletionNewParams{
-    Model:    "Gemini 3 Flash",
-    Messages: []openai.ChatCompletionMessageParamUnion{
-        openai.UserMessage("Count 1 to 5"),
+stream := client.Chat.NewStreaming(ctx, runjobs.ChatCompletionParams{
+    Model: "Gemini 3 Flash",
+    Messages: []runjobs.ChatMessage{
+        {Role: "user", Content: "Count 1 to 5"},
     },
 })
+defer stream.Close()
+var cost float64
 for stream.Next() {
     chunk := stream.Current()
     for _, c := range chunk.Choices {
         fmt.Print(c.Delta.Content)
     }
+    if chunk.Usage != nil {
+        cost = chunk.Usage.TotalCost
+    }
 }
+fmt.Printf("\nCost: $%.6f\n", cost)
 ```
 
 ### Image Generation & Editing
@@ -102,6 +108,7 @@ img, _ := client.Image.Generate(ctx, "MiniMax Image-01", runjobs.ImageGeneratePa
     Size:   "1024x1024",
 })
 fmt.Println(len(img.Data[0].B64JSON)) // base64 image data
+fmt.Printf("Cost: $%.6f\n", img.Usage.TotalCost)
 
 // Edit (multipart)
 f, _ := os.Open("photo.png")
@@ -110,6 +117,7 @@ edited, _ := client.Image.Edit(ctx, "GPT Image", runjobs.ImageEditParams{
     Image:  f,
     Prompt: "add a party hat",
 })
+fmt.Printf("Cost: $%.6f\n", edited.Usage.TotalCost)
 ```
 
 ### Text-to-Speech & Speech-to-Text
@@ -121,6 +129,7 @@ speech, _ := client.Audio.Speech(ctx, "OpenAI/TTS", runjobs.SpeechParams{
     Voice: "nova",
 })
 os.WriteFile("output.mp3", speech.Data, 0644)
+fmt.Printf("Cost: $%.6f\n", speech.Usage.TotalCost)
 
 // STT
 audio, _ := os.Open("recording.mp3")
@@ -130,6 +139,7 @@ transcript, _ := client.Audio.Transcribe(ctx, "OpenAI/Whisper", runjobs.Transcri
     Filename: "recording.mp3",
 })
 fmt.Println(transcript.Text)
+fmt.Printf("Cost: $%.6f\n", transcript.Usage.TotalCost)
 ```
 
 ### Video Generation (Async)
@@ -155,7 +165,6 @@ if status.Status == "succeeded" {
 ### Computer Use (AI GUI Control)
 
 ```go
-// Execute one step of a computer-use agent loop
 step, _ := client.Computer.Step(ctx, "AI Control", runjobs.ComputerStepParams{
     Messages: []map[string]any{
         {
@@ -167,7 +176,6 @@ step, _ := client.Computer.Step(ctx, "AI Control", runjobs.ComputerStepParams{
     DisplayHeight: 1080,
 })
 
-// Inspect the model's actions
 for _, block := range step.Content {
     switch block.Type {
     case "text":
@@ -178,14 +186,15 @@ for _, block := range step.Content {
         fmt.Printf("Call: %s %v\n", block.CallID, block.Action)
     }
 }
+fmt.Printf("Cost: $%.6f\n", step.Usage.TotalCost)
 ```
 
 ## Error Handling
 
-All errors — including gateway-specific endpoints — use `*openai.Error`:
+All errors use `*runjobs.APIError`:
 
 ```go
-var apiErr *openai.Error
+var apiErr *runjobs.APIError
 if errors.As(err, &apiErr) {
     fmt.Println(apiErr.StatusCode, apiErr.Message)
 }
@@ -195,7 +204,7 @@ if errors.As(err, &apiErr) {
 
 | Service | Methods | Description |
 |---------|---------|-------------|
-| `client.Chat` | `New`, `NewStreaming` | OpenAI-compatible chat (via openai-go) |
+| `client.Chat` | `New`, `NewStreaming` | OpenAI-compatible chat completions |
 | `client.Models` | `List` | Model catalog with pricing and capabilities |
 | `client.Image` | `Generate`, `Edit` | Image generation and editing |
 | `client.Audio` | `Speech`, `Transcribe` | Text-to-speech and speech-to-text |
