@@ -14,11 +14,12 @@ type ImageService struct {
 
 // ImageGenerateParams configures an image generation request.
 type ImageGenerateParams struct {
-	Prompt  string `json:"prompt"`
-	Size    string `json:"size,omitempty"`
-	N       int    `json:"n,omitempty"`
-	Quality string `json:"quality,omitempty"`
-	Style   string `json:"style,omitempty"`
+	Prompt             string   `json:"prompt"`
+	Size               string   `json:"size,omitempty"`
+	N                  int      `json:"n,omitempty"`
+	Quality            string   `json:"quality,omitempty"`
+	Style              string   `json:"style,omitempty"`
+	ReferenceImageURLs []string `json:"reference_image_urls,omitempty"`
 }
 
 // ImageResponse is the response from an image generation or edit request.

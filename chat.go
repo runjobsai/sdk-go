@@ -15,11 +15,66 @@ type ChatService struct {
 }
 
 // ChatMessage represents a single message in the conversation.
+// Content can be a string for simple text messages, or a []ContentPart
+// for multi-modal messages (e.g. text + image).
 type ChatMessage struct {
 	Role       string `json:"role"`
-	Content    string `json:"content"`
+	Content    any    `json:"content"`
 	Name       string `json:"name,omitempty"`
 	ToolCallID string `json:"tool_call_id,omitempty"`
+	ToolCalls  []ChatToolCall `json:"tool_calls,omitempty"`
+}
+
+// ContentPart is a single part of a multi-modal message content array.
+type ContentPart struct {
+	Type     string    `json:"type"`
+	Text     string    `json:"text,omitempty"`
+	ImageURL *ImageURL `json:"image_url,omitempty"`
+}
+
+// ImageURL references an image by URL or base64 data URI.
+type ImageURL struct {
+	URL    string `json:"url"`
+	Detail string `json:"detail,omitempty"` // "auto" | "low" | "high"
+}
+
+// UserMessage creates a simple text user message.
+func UserMessage(content string) ChatMessage {
+	return ChatMessage{Role: "user", Content: content}
+}
+
+// SystemMessage creates a system message.
+func SystemMessage(content string) ChatMessage {
+	return ChatMessage{Role: "system", Content: content}
+}
+
+// AssistantMessage creates an assistant message.
+func AssistantMessage(content string) ChatMessage {
+	return ChatMessage{Role: "assistant", Content: content}
+}
+
+// ToolResultMessage creates a tool result message.
+func ToolResultMessage(toolCallID, content string) ChatMessage {
+	return ChatMessage{Role: "tool", ToolCallID: toolCallID, Content: content}
+}
+
+// UserMessageParts creates a multi-modal user message from content parts.
+func UserMessageParts(parts ...ContentPart) ChatMessage {
+	return ChatMessage{Role: "user", Content: parts}
+}
+
+// TextPart creates a text content part.
+func TextPart(text string) ContentPart {
+	return ContentPart{Type: "text", Text: text}
+}
+
+// ImagePart creates an image_url content part.
+func ImagePart(url string, detail ...string) ContentPart {
+	p := ContentPart{Type: "image_url", ImageURL: &ImageURL{URL: url}}
+	if len(detail) > 0 {
+		p.ImageURL.Detail = detail[0]
+	}
+	return p
 }
 
 // ChatCompletionParams configures a chat completion request.
@@ -69,10 +124,21 @@ type ChatChoice struct {
 }
 
 // ChatChoiceMessage is the assistant message in a choice.
+// Content is typically a string, but may be null when the model only
+// produces tool calls.
 type ChatChoiceMessage struct {
 	Role      string         `json:"role"`
-	Content   string         `json:"content"`
+	Content   any            `json:"content"`
 	ToolCalls []ChatToolCall `json:"tool_calls,omitempty"`
+}
+
+// ContentString returns the content as a string. Returns "" if content
+// is nil or not a string (e.g. when the model only produced tool calls).
+func (m ChatChoiceMessage) ContentString() string {
+	if s, ok := m.Content.(string); ok {
+		return s
+	}
+	return ""
 }
 
 // ChatToolCall represents a tool call made by the model.
