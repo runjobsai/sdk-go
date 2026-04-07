@@ -54,12 +54,8 @@ type ComputerContentBlock struct {
 	Action map[string]any  `json:"action,omitempty"`
 }
 
-// ComputerUsage reports token consumption for a computer use step.
-type ComputerUsage struct {
-	PromptTokens     int     `json:"prompt_tokens"`
-	CompletionTokens int     `json:"completion_tokens"`
-	TotalCost        float64 `json:"total_cost"`
-}
+// ComputerUsage is an alias for Usage.
+type ComputerUsage = Usage
 
 // Step executes one step of a computer use agent loop: given a screenshot
 // and conversation history, returns the next action(s) the model wants executed.

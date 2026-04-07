@@ -164,13 +164,8 @@ type ChatToolCallFunction struct {
 	Arguments string `json:"arguments"`
 }
 
-// ChatCompletionUsage reports token consumption and cost.
-type ChatCompletionUsage struct {
-	PromptTokens     int     `json:"prompt_tokens"`
-	CompletionTokens int     `json:"completion_tokens"`
-	TotalTokens      int     `json:"total_tokens"`
-	TotalCost        float64 `json:"total_cost"`
-}
+// ChatCompletionUsage is an alias for Usage, kept for naming clarity in chat contexts.
+type ChatCompletionUsage = Usage
 
 // ChatCompletionChunk is a single chunk in a streaming chat completion response.
 type ChatCompletionChunk struct {
