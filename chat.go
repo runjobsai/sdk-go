@@ -253,6 +253,52 @@ func (s *Stream) Close() error {
 	return nil
 }
 
+// NewRaw sends a pre-built JSON body to /v1/chat/completions (non-streaming).
+// Use this when you need to forward a request body verbatim — e.g. proxying
+// agent requests that may contain fields outside ChatCompletionParams.
+func (s *ChatService) NewRaw(ctx context.Context, body json.RawMessage) (*ChatCompletion, error) {
+	var resp ChatCompletion
+	if err := s.client.doJSON(ctx, "/v1/chat/completions", body, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// NewStreamingRaw sends a pre-built JSON body to /v1/chat/completions with
+// streaming enabled, returning a Stream iterator. The caller should ensure
+// the body includes "stream":true and "stream_options":{"include_usage":true}.
+func (s *ChatService) NewStreamingRaw(ctx context.Context, body json.RawMessage) *Stream {
+	stream := &Stream{}
+
+	req, err := s.client.newJSONRequest(ctx, http.MethodPost, "/v1/chat/completions", body)
+	if err != nil {
+		stream.err = err
+		stream.done = true
+		return stream
+	}
+
+	// Disable gzip so SSE lines arrive immediately.
+	req.Header.Set("Accept-Encoding", "identity")
+
+	resp, err := s.client.httpClient.Do(req)
+	if err != nil {
+		stream.err = err
+		stream.done = true
+		return stream
+	}
+
+	if resp.StatusCode >= 400 {
+		defer resp.Body.Close()
+		stream.err = s.client.readError(req, resp)
+		stream.done = true
+		return stream
+	}
+
+	stream.resp = resp
+	stream.scanner = bufio.NewScanner(resp.Body)
+	return stream
+}
+
 // NewStreaming creates a streaming chat completion, returning a Stream iterator.
 func (s *ChatService) NewStreaming(ctx context.Context, params ChatCompletionParams) *Stream {
 	params.Stream = true
