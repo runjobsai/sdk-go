@@ -16,11 +16,16 @@ type AudioService struct {
 }
 
 // SpeechParams holds parameters for text-to-speech generation.
+// Emotion, Pitch, Volume, and Timber are supported by providers like MiniMax.
 type SpeechParams struct {
 	Input          string  `json:"input"`
 	Voice          string  `json:"voice"`
 	ResponseFormat string  `json:"response_format,omitempty"`
 	Speed          float64 `json:"speed,omitempty"`
+	Emotion        string  `json:"emotion,omitempty"`  // "happy" | "sad" | "angry" | "fearful" | "disgusted" | "surprised" | "neutral"
+	Pitch          float64 `json:"pitch,omitempty"`    // -12 to 12 semitones
+	Volume         float64 `json:"volume,omitempty"`   // 0.1 – 10.0 (1.0 = normal)
+	Timber         float64 `json:"timber,omitempty"`   // -12 to 12 (voice timbre shift)
 	User           string  `json:"user,omitempty"`
 }
 
