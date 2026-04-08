@@ -123,6 +123,12 @@ fmt.Printf("Cost: $%.6f\n", edited.Usage.TotalCost)
 ### Text-to-Speech & Speech-to-Text
 
 ```go
+// List voices for a TTS model
+voices, _ := client.Audio.ListVoices(ctx, "MiniMax Speech 2.6 HD")
+for _, v := range voices {
+    fmt.Printf("%s  %s  %s  %s\n", v.ID, v.Name, v.Gender, v.Language)
+}
+
 // TTS
 speech, _ := client.Audio.Speech(ctx, "OpenAI/TTS", runjobs.SpeechParams{
     Input: "Hello from the gateway",
@@ -207,7 +213,7 @@ if errors.As(err, &apiErr) {
 | `client.Chat` | `New`, `NewStreaming` | OpenAI-compatible chat completions |
 | `client.Models` | `List` | Model catalog with pricing and capabilities |
 | `client.Image` | `Generate`, `Edit` | Image generation and editing |
-| `client.Audio` | `Speech`, `Transcribe` | Text-to-speech and speech-to-text |
+| `client.Audio` | `ListVoices`, `Speech`, `Transcribe` | Voice catalog, text-to-speech, and speech-to-text |
 | `client.Video` | `Generate`, `GetStatus`, `Wait`, `GetContent` | Async video generation |
 | `client.Computer` | `Step` | Computer use (AI GUI control) |
 
