@@ -64,6 +64,45 @@ func TestAudioSpeech(t *testing.T) {
 	}
 }
 
+func TestAudioListVoices(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/v1/audio/voices" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		if m := r.URL.Query().Get("model"); m != "MiniMax Speech 2.6 HD" {
+			t.Fatalf("expected model query param, got %q", m)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{
+			"object": "list",
+			"model": "MiniMax Speech 2.6 HD",
+			"voices": [
+				{"id": "English_CalmWoman", "name": "Calm Woman", "gender": "female", "language": "en"},
+				{"id": "Japanese_KindLady", "name": "Kind Lady", "gender": "female", "language": "ja"}
+			]
+		}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient("gw-key", WithBaseURL(srv.URL))
+	voices, err := c.Audio.ListVoices(context.Background(), "MiniMax Speech 2.6 HD")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(voices) != 2 {
+		t.Fatalf("expected 2 voices, got %d", len(voices))
+	}
+	if voices[0].ID != "English_CalmWoman" {
+		t.Fatalf("expected first voice ID English_CalmWoman, got %s", voices[0].ID)
+	}
+	if voices[1].Language != "ja" {
+		t.Fatalf("expected second voice language ja, got %s", voices[1].Language)
+	}
+}
+
 func TestAudioTranscribe(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

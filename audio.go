@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net/url"
 )
 
 // AudioService provides access to the gateway's audio endpoints.
@@ -34,6 +35,26 @@ type SpeechResponse struct {
 	Data        []byte `json:"-"`
 	ContentType string `json:"-"`
 	Usage       Usage  `json:"usage"`
+}
+
+// Voice describes a single voice available for text-to-speech.
+type Voice struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Gender   string `json:"gender,omitempty"`
+	Language string `json:"language,omitempty"`
+}
+
+// ListVoices returns the available voices for the given TTS model.
+func (s *AudioService) ListVoices(ctx context.Context, model string) ([]Voice, error) {
+	path := "/v1/audio/voices?model=" + url.QueryEscape(model)
+	var resp struct {
+		Voices []Voice `json:"voices"`
+	}
+	if err := s.client.doGet(ctx, path, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Voices, nil
 }
 
 // TranscribeParams holds parameters for audio transcription.
