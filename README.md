@@ -123,19 +123,29 @@ fmt.Printf("Cost: $%.6f\n", edited.Usage.TotalCost)
 ### Text-to-Speech & Speech-to-Text
 
 ```go
-// List voices for a TTS model
-voices, _ := client.Audio.ListVoices(ctx, "MiniMax Speech 2.6 HD")
-for _, v := range voices {
+// List voices and supported emotions for a TTS model
+catalog, _ := client.Audio.ListVoices(ctx, "MiniMax Speech 2.6 HD")
+for _, v := range catalog.Voices {
     fmt.Printf("%s  %s  %s  %s\n", v.ID, v.Name, v.Gender, v.Language)
 }
+fmt.Println("Emotions:", catalog.SupportedEmotions)
+// e.g. ["happy", "sad", "angry", "fearful", "disgusted", "surprised", "calm", "whisper"]
 
-// TTS
+// TTS (basic)
 speech, _ := client.Audio.Speech(ctx, "OpenAI/TTS", runjobs.SpeechParams{
     Input: "Hello from the gateway",
     Voice: "nova",
 })
 os.WriteFile("output.mp3", speech.Data, 0644)
 fmt.Printf("Cost: $%.6f\n", speech.Usage.TotalCost)
+
+// TTS with emotion/speed (optional, provider-dependent)
+speech, _ = client.Audio.Speech(ctx, "MiniMax Speech 2.6 HD", runjobs.SpeechParams{
+    Input:   "I'm so happy to see you!",
+    Voice:   "English_radiant_girl",
+    Speed:   1.1,
+    Emotion: "happy", // optional; omit to let the model auto-detect
+})
 
 // STT
 audio, _ := os.Open("recording.mp3")
