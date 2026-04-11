@@ -25,16 +25,41 @@ type ImageGenerateParams struct {
 }
 
 // ImageResponse is the response from an image generation or edit request.
+//
+// Usage carries the gateway's billing total plus, when the upstream surfaces
+// them, vendor-reported token counts (Seedream charges per output_token, so
+// callers need OutputTokens for cost reconciliation).
 type ImageResponse struct {
 	Created int64         `json:"created"`
 	Data    []ImageResult `json:"data"`
-	Usage   Usage         `json:"usage"`
+	Usage   ImageUsage    `json:"usage"`
 }
 
 // ImageResult is a single image in the response.
+//
+// Size is the actual pixel dimensions of THIS image as "WIDTHxHEIGHT".
+// Adapters that return multi-image groups (Seedream sequential generation)
+// may produce images of different sizes — read this per-result rather than
+// assuming everything matches the request's `size` parameter.
 type ImageResult struct {
+	URL           string `json:"url,omitempty"`
 	B64JSON       string `json:"b64_json,omitempty"`
 	RevisedPrompt string `json:"revised_prompt,omitempty"`
+	Size          string `json:"size,omitempty"`
+}
+
+// ImageUsage merges the gateway's billing fields with the upstream provider's
+// token-usage envelope. Both groups arrive in the same JSON object — the
+// gateway's TotalCost is always present; the token / tool fields are only
+// populated for adapters whose API returns them (Ark Seedream, OpenAI gpt-image-1).
+type ImageUsage struct {
+	TotalCost       float64 `json:"total_cost"`
+	GeneratedImages int     `json:"generated_images,omitempty"`
+	OutputTokens    int     `json:"output_tokens,omitempty"`
+	TotalTokens     int     `json:"total_tokens,omitempty"`
+	// ToolUsage counts each tool the model invoked (e.g. Seedream
+	// 5.0 lite web_search). Map key is the tool name.
+	ToolUsage map[string]int `json:"tool_usage,omitempty"`
 }
 
 // ImageEditParams configures an image edit request.

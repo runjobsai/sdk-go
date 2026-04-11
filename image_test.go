@@ -27,8 +27,14 @@ func TestImageGenerate(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{
 			"created": 1700000000,
-			"data": [{"b64_json": "aW1hZ2VkYXRh", "revised_prompt": "a cat sitting"}],
-			"usage": {"total_cost": 0.04}
+			"data": [{"b64_json": "aW1hZ2VkYXRh", "revised_prompt": "a cat sitting", "size": "1024x1024"}],
+			"usage": {
+				"total_cost": 0.04,
+				"generated_images": 1,
+				"output_tokens": 16384,
+				"total_tokens": 16384,
+				"tool_usage": {"web_search": 2}
+			}
 		}`)
 	}))
 	defer srv.Close()
@@ -59,8 +65,23 @@ func TestImageGenerate(t *testing.T) {
 	if resp.Data[0].RevisedPrompt != "a cat sitting" {
 		t.Fatalf("unexpected revised prompt: %s", resp.Data[0].RevisedPrompt)
 	}
+	if resp.Data[0].Size != "1024x1024" {
+		t.Fatalf("expected size 1024x1024, got %s", resp.Data[0].Size)
+	}
 	if resp.Usage.TotalCost != 0.04 {
 		t.Fatalf("expected total_cost 0.04, got %f", resp.Usage.TotalCost)
+	}
+	if resp.Usage.GeneratedImages != 1 {
+		t.Fatalf("expected generated_images 1, got %d", resp.Usage.GeneratedImages)
+	}
+	if resp.Usage.OutputTokens != 16384 {
+		t.Fatalf("expected output_tokens 16384, got %d", resp.Usage.OutputTokens)
+	}
+	if resp.Usage.TotalTokens != 16384 {
+		t.Fatalf("expected total_tokens 16384, got %d", resp.Usage.TotalTokens)
+	}
+	if got := resp.Usage.ToolUsage["web_search"]; got != 2 {
+		t.Fatalf("expected tool_usage.web_search 2, got %d", got)
 	}
 }
 

@@ -11,16 +11,54 @@ type VideoService struct {
 	client *Client
 }
 
-// VideoGenerateParams configures a video generation request.
+// VideoGenerateParams configures a video generation request. Most fields
+// map 1:1 to the gateway's `/v1/videos/generations` body; pointer-typed
+// flags (Watermark, CameraFixed, ReturnLastFrame, Draft) are tri-state so
+// `false` is distinguishable from "unset, use upstream default".
 type VideoGenerateParams struct {
 	Prompt        string `json:"prompt"`
 	AspectRatio   string `json:"aspect_ratio,omitempty"`
 	Duration      int    `json:"duration,omitempty"`
 	Resolution    string `json:"resolution,omitempty"`
 	GenerateAudio *bool  `json:"generate_audio,omitempty"`
+	// First/last frame keyframes (image-to-video). Either a publicly
+	// hosted URL or raw base64 — the gateway stashes b64 inputs as
+	// short-lived blobs so the upstream sees a URL.
+	FirstFrameURL string `json:"first_frame_url,omitempty"`
+	LastFrameURL  string `json:"last_frame_url,omitempty"`
 	FirstFrameB64 string `json:"first_frame_b64,omitempty"`
 	LastFrameB64  string `json:"last_frame_b64,omitempty"`
-	User          string `json:"user,omitempty"`
+	// Multimodal reference inputs (Seedance 2.0): up to 9 reference
+	// images, up to 3 reference videos (≤15s total), up to 3 reference
+	// audios (≤15s total). Reference images may be data: URIs; the
+	// gateway will materialise them. Reference videos / audios must be
+	// hosted URLs (or data URIs that the gateway can stash).
+	ReferenceImageURLs []string `json:"reference_image_urls,omitempty"`
+	ReferenceImagesB64 []string `json:"reference_images_b64,omitempty"`
+	ReferenceVideoURLs []string `json:"reference_video_urls,omitempty"`
+	ReferenceAudioURLs []string `json:"reference_audio_urls,omitempty"`
+	// Output spec knobs.
+	Watermark       *bool `json:"watermark,omitempty"`
+	CameraFixed     *bool `json:"camera_fixed,omitempty"`
+	ReturnLastFrame *bool `json:"return_last_frame,omitempty"`
+	Seed            int64 `json:"seed,omitempty"`
+	// Frames is an alternative to Duration for Seedance 1.0 pro / lite
+	// (range [29, 289], step 25 + 4n).
+	Frames int `json:"frames,omitempty"`
+	// Draft / DraftTaskID enable Seedance 1.5 pro Draft Mode. Set
+	// Draft=true on Step1 to get a cheap preview; Step2 references the
+	// Step1 task id via DraftTaskID to promote the draft to a final video.
+	Draft       *bool  `json:"draft,omitempty"`
+	DraftTaskID string `json:"draft_task_id,omitempty"`
+	// ServiceTier "flex" switches to offline inference (~50% price);
+	// pair with ExecutionExpiresAfter to bound the queue time. "default"
+	// is the standard online tier.
+	ServiceTier           string `json:"service_tier,omitempty"`
+	ExecutionExpiresAfter int64  `json:"execution_expires_after,omitempty"`
+	// CallbackURL receives a POST when the task transitions states. The
+	// payload mirrors GetStatus's response shape.
+	CallbackURL string `json:"callback_url,omitempty"`
+	User        string `json:"user,omitempty"`
 }
 
 // VideoTask is the response from a video generation request.
@@ -30,13 +68,41 @@ type VideoTask struct {
 	Usage  Usage  `json:"usage"`
 }
 
-// VideoStatus represents the status of a video generation task.
+// VideoStatus represents the status of a video generation task. The optional
+// metadata fields (LastFrameURL onwards) are only populated when the task is
+// in a terminal state (`succeeded`).
 type VideoStatus struct {
 	ID       string `json:"id"`
 	Status   string `json:"status"`
 	Progress int    `json:"progress"`
 	VideoURL string `json:"video_url,omitempty"`
 	Error    string `json:"error,omitempty"`
+	// LastFrameURL is the final frame as a separate image URL —
+	// populated when the original request set ReturnLastFrame=true.
+	LastFrameURL string `json:"last_frame_url,omitempty"`
+	// DraftTaskID is the Seedance Draft Mode Step1 result: when a draft
+	// task succeeds, the gateway exposes its id so the caller can pass
+	// it back as DraftTaskID on a follow-up Step2 request.
+	DraftTaskID string `json:"draft_task_id,omitempty"`
+	Duration    int    `json:"duration,omitempty"`
+	FPS         int    `json:"fps,omitempty"`
+	Resolution  string `json:"resolution,omitempty"`
+	Ratio       string `json:"ratio,omitempty"`
+	Seed        int64  `json:"seed,omitempty"`
+	ServiceTier string `json:"service_tier,omitempty"`
+	// UsageTokens is the upstream-reported token consumption (Seedance
+	// charges per output token). Independent of the gateway billing
+	// total in VideoTask.Usage.TotalCost.
+	UsageTokens *VideoUsageTokens `json:"usage_tokens,omitempty"`
+	CreatedAt   int64             `json:"created_at,omitempty"`
+	UpdatedAt   int64             `json:"updated_at,omitempty"`
+}
+
+// VideoUsageTokens carries the upstream-reported token counts surfaced on
+// terminal video status responses.
+type VideoUsageTokens struct {
+	CompletionTokens int64 `json:"completion_tokens,omitempty"`
+	TotalTokens      int64 `json:"total_tokens,omitempty"`
 }
 
 // PollOption configures polling behaviour for Wait.

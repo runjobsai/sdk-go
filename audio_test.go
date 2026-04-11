@@ -92,14 +92,14 @@ func TestAudioListVoices(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(voices) != 2 {
-		t.Fatalf("expected 2 voices, got %d", len(voices))
+	if len(voices.Voices) != 2 {
+		t.Fatalf("expected 2 voices, got %d", len(voices.Voices))
 	}
-	if voices[0].ID != "English_CalmWoman" {
-		t.Fatalf("expected first voice ID English_CalmWoman, got %s", voices[0].ID)
+	if voices.Voices[0].ID != "English_CalmWoman" {
+		t.Fatalf("expected first voice ID English_CalmWoman, got %s", voices.Voices[0].ID)
 	}
-	if voices[1].Language != "ja" {
-		t.Fatalf("expected second voice language ja, got %s", voices[1].Language)
+	if voices.Voices[1].Language != "ja" {
+		t.Fatalf("expected second voice language ja, got %s", voices.Voices[1].Language)
 	}
 }
 
