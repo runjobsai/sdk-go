@@ -115,15 +115,82 @@ func (c *Client) do(req *http.Request, dst any) error {
 }
 
 // makeError constructs an *APIError from a failed HTTP response.
+//
+// The upstream gateway is *supposed* to return `{"error": "<string>"}`, but
+// real-world responses (especially when the gateway transparently bubbles up
+// a provider's error envelope) come in several shapes:
+//
+//	{"error": "plain string"}                            // ideal
+//	{"error": {"message": "...", "code": "...", ...}}    // OpenAI / Ark style
+//	{"error": {"error": {"message": "..."}}}             // doubly nested
+//	non-JSON HTML / plain text body                      // upstream proxy
+//
+// Older versions of this function only handled the first form, so any
+// structured error silently became `APIError{Message:""}` and the caller saw
+// `runjobs: 502 gateway_error: ` with no detail. We now try harder, falling
+// back to the raw body so callers always have *something* actionable.
 func (c *Client) makeError(resp *http.Response, body []byte) error {
-	var payload struct {
-		Error string `json:"error"`
-	}
-	_ = json.Unmarshal(body, &payload)
-
 	return &APIError{
 		StatusCode: resp.StatusCode,
 		Type:       "gateway_error",
-		Message:    payload.Error,
+		Message:    extractErrorMessage(body),
 	}
+}
+
+// extractErrorMessage pulls a human-readable message out of an error body,
+// regardless of whether `error` is a string, an object with `message`/`code`,
+// or absent entirely.
+func extractErrorMessage(body []byte) string {
+	if len(body) == 0 {
+		return ""
+	}
+	var raw struct {
+		Error json.RawMessage `json:"error"`
+	}
+	if err := json.Unmarshal(body, &raw); err == nil && len(raw.Error) > 0 {
+		if msg := messageFromRaw(raw.Error); msg != "" {
+			return msg
+		}
+	}
+	// Body wasn't JSON or had no `error` field — surface it raw, but keep it
+	// bounded so an HTML error page doesn't blow up downstream prompts.
+	const maxRawLen = 2048
+	if len(body) > maxRawLen {
+		return string(body[:maxRawLen]) + "…(truncated)"
+	}
+	return string(body)
+}
+
+// messageFromRaw inspects a JSON value sitting at the `error` key and tries to
+// turn it into a string. Handles plain strings, {message,code} objects, and
+// one level of nesting (`{"error":{"error":{...}}}`).
+func messageFromRaw(raw json.RawMessage) string {
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	var obj struct {
+		Message string          `json:"message"`
+		Code    string          `json:"code"`
+		Type    string          `json:"type"`
+		Param   string          `json:"param"`
+		Error   json.RawMessage `json:"error"`
+	}
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return ""
+	}
+	if obj.Message != "" {
+		out := obj.Message
+		if obj.Code != "" {
+			out = obj.Code + ": " + out
+		}
+		if obj.Param != "" {
+			out += " (param=" + obj.Param + ")"
+		}
+		return out
+	}
+	if len(obj.Error) > 0 {
+		return messageFromRaw(obj.Error)
+	}
+	return ""
 }

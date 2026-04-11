@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -86,8 +87,75 @@ func TestMakeErrorWithMalformedJSON(t *testing.T) {
 	if apiErr.StatusCode != 502 {
 		t.Fatalf("expected 502, got %d", apiErr.StatusCode)
 	}
-	// Message should be empty when JSON parse fails
-	if apiErr.Message != "" {
-		t.Fatalf("expected empty message, got %q", apiErr.Message)
+	// Non-JSON bodies now fall back to raw text so callers see *something*
+	// instead of a bare "runjobs: 502 gateway_error: ".
+	if apiErr.Message != "not json" {
+		t.Fatalf("expected raw body fallback, got %q", apiErr.Message)
+	}
+}
+
+func TestMakeErrorEmptyBody(t *testing.T) {
+	c := NewClient("gw-key")
+	resp := &http.Response{StatusCode: 502}
+	err := c.makeError(resp, nil)
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Message != "" {
+		t.Fatalf("expected empty message for empty body, got %v", err)
+	}
+}
+
+func TestMakeErrorStringErrorField(t *testing.T) {
+	c := NewClient("gw-key")
+	resp := &http.Response{StatusCode: 500}
+	err := c.makeError(resp, []byte(`{"error":"plain string"}`))
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Message != "plain string" {
+		t.Fatalf("expected 'plain string', got %v", err)
+	}
+}
+
+func TestMakeErrorObjectErrorField(t *testing.T) {
+	c := NewClient("gw-key")
+	resp := &http.Response{StatusCode: 400}
+	body := []byte(`{"error":{"code":"InvalidParameter","message":"first/last frame content cannot be mixed with reference media content","param":"content","type":"BadRequest"}}`)
+	err := c.makeError(resp, body)
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	want := "InvalidParameter: first/last frame content cannot be mixed with reference media content (param=content)"
+	if apiErr.Message != want {
+		t.Fatalf("expected %q, got %q", want, apiErr.Message)
+	}
+}
+
+func TestMakeErrorNestedErrorField(t *testing.T) {
+	c := NewClient("gw-key")
+	resp := &http.Response{StatusCode: 502}
+	body := []byte(`{"error":{"error":{"message":"inner detail","code":"DEEP"}}}`)
+	err := c.makeError(resp, body)
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.Message != "DEEP: inner detail" {
+		t.Fatalf("expected nested unwrap, got %v", err)
+	}
+}
+
+func TestMakeErrorTruncatesLongRawBody(t *testing.T) {
+	c := NewClient("gw-key")
+	resp := &http.Response{StatusCode: 502}
+	body := make([]byte, 4096)
+	for i := range body {
+		body[i] = 'x'
+	}
+	err := c.makeError(resp, body)
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if len(apiErr.Message) > 2100 { // 2048 + ellipsis suffix
+		t.Fatalf("expected truncated message, got len=%d", len(apiErr.Message))
+	}
+	if !strings.HasSuffix(apiErr.Message, "(truncated)") {
+		t.Fatalf("expected truncation marker, got %q", apiErr.Message[len(apiErr.Message)-20:])
 	}
 }
