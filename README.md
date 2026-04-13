@@ -120,7 +120,7 @@ edited, _ := client.Image.Edit(ctx, "GPT Image", runjobs.ImageEditParams{
 fmt.Printf("Cost: $%.6f\n", edited.Usage.TotalCost)
 ```
 
-`Image.Generate` and `Image.Edit` use the gateway's async job protocol internally: the client submits the job, polls every 2 s for completion, and downloads the resulting blob URLs. All polling is hidden — callers see the same `*ImageResponse` shape regardless of job duration, and the caller's `ctx` deadline (default 10 min) bounds the wait.
+`Image.Generate` and `Image.Edit` hit the gateway's synchronous OpenAI-compatible endpoints (`POST /v1/images/generations`, `POST /v1/images/edits`). For requests expected to run longer than ~100 seconds — large Seedream batches, slow upstream queues — use `Image.GenerateAsync` / `Image.EditAsync` instead. The Async variants submit the job, poll the gateway for completion, and download the result blobs. They return the same `*ImageResponse` shape as the sync methods but avoid Cloudflare's origin timeout (which otherwise replaces the real upstream error with `error code: 502`). The caller's `ctx` deadline bounds the poll wait (default 10 min).
 
 ### Text-to-Speech & Speech-to-Text
 
@@ -224,7 +224,7 @@ if errors.As(err, &apiErr) {
 |---------|---------|-------------|
 | `client.Chat` | `New`, `NewStreaming` | OpenAI-compatible chat completions |
 | `client.Models` | `List` | Model catalog with pricing and capabilities |
-| `client.Image` | `Generate`, `Edit` | Image generation and editing |
+| `client.Image` | `Generate`, `Edit`, `GenerateAsync`, `EditAsync` | Image generation and editing |
 | `client.Audio` | `ListVoices`, `Speech`, `Transcribe` | Voice catalog, text-to-speech, and speech-to-text |
 | `client.Video` | `Generate`, `GetStatus`, `Wait`, `GetContent` | Async video generation |
 | `client.Computer` | `Step` | Computer use (AI GUI control) |

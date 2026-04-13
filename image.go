@@ -75,23 +75,40 @@ type ImageEditParams struct {
 	User           string    `json:"user,omitempty"`
 }
 
-// Generate creates images from a text prompt. It submits the job, polls until
-// completion, downloads the result blobs, and returns an *ImageResponse with
-// B64JSON populated — identical to the old synchronous response shape.
+// Generate creates images from a text prompt using the gateway's synchronous endpoint.
 func (s *ImageService) Generate(ctx context.Context, model string, params ImageGenerateParams) (*ImageResponse, error) {
 	body := struct {
 		Model string `json:"model"`
 		ImageGenerateParams
 	}{Model: model, ImageGenerateParams: params}
 
+	var resp ImageResponse
+	if err := s.client.doJSON(ctx, "/v1/images/generations", body, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// GenerateAsync is the async equivalent of Generate. It submits the job to
+// the gateway's async image endpoint, polls until the job reaches a
+// terminal state, then downloads the result blobs. Use this variant when
+// a request is expected to run long enough to exceed the 100-second
+// origin timeout of upstream CDNs (Cloudflare specifically replaces that
+// with its own 502 page, masking the real upstream error).
+func (s *ImageService) GenerateAsync(ctx context.Context, model string, params ImageGenerateParams) (*ImageResponse, error) {
+	body := struct {
+		Model string `json:"model"`
+		ImageGenerateParams
+	}{Model: model, ImageGenerateParams: params}
+
 	var submit imageJobResponse
-	if err := s.client.doJSON(ctx, "/v1/images/generations", body, &submit); err != nil {
+	if err := s.client.doJSON(ctx, "/v1/async/images/generations", body, &submit); err != nil {
 		return nil, err
 	}
 	if submit.ID == "" {
 		return nil, fmt.Errorf("runjobs: submit response missing job id")
 	}
-	return s.client.waitImageJob(ctx, "/v1/images/generations/"+submit.ID)
+	return s.client.waitImageJob(ctx, "/v1/async/images/generations/"+submit.ID)
 }
 
 // Edit modifies an image given a prompt. The request is sent as multipart/form-data.
@@ -160,12 +177,89 @@ func (s *ImageService) Edit(ctx context.Context, model string, params ImageEditP
 		}
 	}()
 
+	var resp ImageResponse
+	if err := s.client.doMultipart(ctx, "/v1/images/edits", pr, mw.FormDataContentType(), &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// EditAsync is the async equivalent of Edit. It submits the job to the
+// gateway's async image edit endpoint, polls until the job reaches a
+// terminal state, then downloads the result blobs. Use this variant when
+// a request is expected to run long enough to exceed the 100-second
+// origin timeout of upstream CDNs.
+func (s *ImageService) EditAsync(ctx context.Context, model string, params ImageEditParams) (*ImageResponse, error) {
+	pr, pw := io.Pipe()
+	mw := multipart.NewWriter(pw)
+
+	go func() {
+		var err error
+		defer func() {
+			mw.Close()
+			pw.CloseWithError(err)
+		}()
+
+		if err = mw.WriteField("model", model); err != nil {
+			return
+		}
+		if err = mw.WriteField("prompt", params.Prompt); err != nil {
+			return
+		}
+		if params.Size != "" {
+			if err = mw.WriteField("size", params.Size); err != nil {
+				return
+			}
+		}
+		if params.N > 0 {
+			if err = mw.WriteField("n", fmt.Sprintf("%d", params.N)); err != nil {
+				return
+			}
+		}
+		if params.ResponseFormat != "" {
+			if err = mw.WriteField("response_format", params.ResponseFormat); err != nil {
+				return
+			}
+		}
+		if params.User != "" {
+			if err = mw.WriteField("user", params.User); err != nil {
+				return
+			}
+		}
+
+		filename := params.ImageFilename
+		if filename == "" {
+			filename = "image.png"
+		}
+		var part io.Writer
+		if part, err = mw.CreateFormFile("image", filename); err != nil {
+			return
+		}
+		if _, err = io.Copy(part, params.Image); err != nil {
+			return
+		}
+
+		if params.Mask != nil {
+			maskFilename := params.MaskFilename
+			if maskFilename == "" {
+				maskFilename = "mask.png"
+			}
+			var maskPart io.Writer
+			if maskPart, err = mw.CreateFormFile("mask", maskFilename); err != nil {
+				return
+			}
+			if _, err = io.Copy(maskPart, params.Mask); err != nil {
+				return
+			}
+		}
+	}()
+
 	var submit imageJobResponse
-	if err := s.client.doMultipart(ctx, "/v1/images/edits", pr, mw.FormDataContentType(), &submit); err != nil {
+	if err := s.client.doMultipart(ctx, "/v1/async/images/edits", pr, mw.FormDataContentType(), &submit); err != nil {
 		return nil, err
 	}
 	if submit.ID == "" {
 		return nil, fmt.Errorf("runjobs: submit response missing job id")
 	}
-	return s.client.waitImageJob(ctx, "/v1/images/edits/"+submit.ID)
+	return s.client.waitImageJob(ctx, "/v1/async/images/edits/"+submit.ID)
 }
