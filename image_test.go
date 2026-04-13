@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -153,5 +154,81 @@ func TestImageEdit_AsyncHappyPath(t *testing.T) {
 	}
 	if resp.Usage.TotalCost != 0.02 {
 		t.Errorf("TotalCost = %v", resp.Usage.TotalCost)
+	}
+}
+
+func TestImageGenerate_SurfacesFailedJobError(t *testing.T) {
+	const detailedErr = "openai: 400 invalid_request_error: Your prompt was rejected by the content filter"
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/images/generations", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"id":"img_fail","status":"queued"}`)
+	})
+	mux.HandleFunc("/v1/images/generations/img_fail", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"id":"img_fail","status":"failed","error":%q}`, detailedErr)
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	oldFirstDelay, oldPollInterval := imagePollFirstDelay, imagePollInterval
+	imagePollFirstDelay = 10 * time.Millisecond
+	imagePollInterval = 10 * time.Millisecond
+	defer func() {
+		imagePollFirstDelay = oldFirstDelay
+		imagePollInterval = oldPollInterval
+	}()
+
+	c := NewClient("gw-key", WithBaseURL(srv.URL))
+	_, err := c.Image.Generate(context.Background(), "dall-e-3", ImageGenerateParams{Prompt: "forbidden"})
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	apiErr, ok := err.(*APIError)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T: %v", err, err)
+	}
+	if apiErr.StatusCode != 502 {
+		t.Errorf("StatusCode = %d, want 502", apiErr.StatusCode)
+	}
+	if apiErr.Type != "image_job_failed" {
+		t.Errorf("Type = %q, want image_job_failed", apiErr.Type)
+	}
+	if apiErr.Message != detailedErr {
+		t.Errorf("Message = %q, want %q (this assertion is the whole point of the refactor)", apiErr.Message, detailedErr)
+	}
+}
+
+func TestImageGenerate_CtxCancel(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/images/generations", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"id":"img_slow","status":"queued"}`)
+	})
+	mux.HandleFunc("/v1/images/generations/img_slow", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"id":"img_slow","status":"running"}`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	oldFirstDelay, oldPollInterval := imagePollFirstDelay, imagePollInterval
+	imagePollFirstDelay = 10 * time.Millisecond
+	imagePollInterval = 10 * time.Millisecond
+	defer func() {
+		imagePollFirstDelay = oldFirstDelay
+		imagePollInterval = oldPollInterval
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	c := NewClient("gw-key", WithBaseURL(srv.URL))
+	_, err := c.Image.Generate(ctx, "dall-e-3", ImageGenerateParams{Prompt: "x"})
+	if err == nil {
+		t.Fatal("expected ctx deadline error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected context.DeadlineExceeded, got %v", err)
 	}
 }
