@@ -3,10 +3,12 @@ package runjobs
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 // newJSONRequest builds an authenticated JSON POST request.
@@ -193,4 +195,120 @@ func messageFromRaw(raw json.RawMessage) string {
 		return messageFromRaw(obj.Error)
 	}
 	return ""
+}
+
+// imagePollFirstDelay is the delay before the first poll after job submission.
+// imagePollInterval is the delay between subsequent polls.
+// Both are package-scope variables so tests can override them.
+var (
+	imagePollFirstDelay = 2 * time.Second
+	imagePollInterval   = 2 * time.Second
+)
+
+type imageJobResponse struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	Error  string `json:"error,omitempty"`
+	Data   []struct {
+		URL           string `json:"url"`
+		Size          string `json:"size,omitempty"`
+		RevisedPrompt string `json:"revised_prompt,omitempty"`
+	} `json:"data,omitempty"`
+	Usage imageJobUsage `json:"usage"`
+}
+
+type imageJobUsage struct {
+	TotalCost       float64        `json:"total_cost"`
+	GeneratedImages int            `json:"generated_images,omitempty"`
+	OutputTokens    int            `json:"output_tokens,omitempty"`
+	TotalTokens     int            `json:"total_tokens,omitempty"`
+	ToolUsage       map[string]int `json:"tool_usage,omitempty"`
+}
+
+// waitImageJob polls statusPath until the job reaches a terminal state, then
+// returns the assembled *ImageResponse. It respects ctx cancellation; if ctx
+// has no deadline, a 10-minute internal timeout is applied.
+func (c *Client) waitImageJob(ctx context.Context, statusPath string) (*ImageResponse, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Minute)
+		defer cancel()
+	}
+
+	timer := time.NewTimer(imagePollFirstDelay)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+
+		var status imageJobResponse
+		if err := c.doGet(ctx, statusPath, &status); err != nil {
+			return nil, err
+		}
+		switch status.Status {
+		case "succeeded":
+			return c.assembleImageResponse(ctx, &status)
+		case "failed":
+			return nil, &APIError{StatusCode: 502, Type: "image_job_failed", Message: status.Error}
+		case "queued", "running":
+			timer.Reset(imagePollInterval)
+		default:
+			return nil, fmt.Errorf("runjobs: unknown job status %q", status.Status)
+		}
+	}
+}
+
+// assembleImageResponse converts a succeeded imageJobResponse into an
+// *ImageResponse, downloading each result image as base64.
+func (c *Client) assembleImageResponse(ctx context.Context, status *imageJobResponse) (*ImageResponse, error) {
+	out := &ImageResponse{
+		Created: time.Now().Unix(),
+		Data:    make([]ImageResult, len(status.Data)),
+		Usage: ImageUsage{
+			TotalCost:       status.Usage.TotalCost,
+			GeneratedImages: status.Usage.GeneratedImages,
+			OutputTokens:    status.Usage.OutputTokens,
+			TotalTokens:     status.Usage.TotalTokens,
+			ToolUsage:       status.Usage.ToolUsage,
+		},
+	}
+	for i, d := range status.Data {
+		b64, err := c.downloadBlobAsB64(ctx, d.URL)
+		if err != nil {
+			return nil, fmt.Errorf("runjobs: fetch result image %d: %w", i, err)
+		}
+		out.Data[i] = ImageResult{
+			B64JSON:       b64,
+			Size:          d.Size,
+			RevisedPrompt: d.RevisedPrompt,
+		}
+	}
+	return out, nil
+}
+
+// downloadBlobAsB64 fetches the blob at the given full URL and returns it as
+// a base64-encoded string. The Authorization header is set for uniformity even
+// though the gateway's blob endpoint is unauthenticated.
+func (c *Client) downloadBlobAsB64(ctx context.Context, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("blob download: %s", resp.Status)
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(data), nil
 }

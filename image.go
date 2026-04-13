@@ -75,18 +75,23 @@ type ImageEditParams struct {
 	User           string    `json:"user,omitempty"`
 }
 
-// Generate creates images from a text prompt.
+// Generate creates images from a text prompt. It submits the job, polls until
+// completion, downloads the result blobs, and returns an *ImageResponse with
+// B64JSON populated — identical to the old synchronous response shape.
 func (s *ImageService) Generate(ctx context.Context, model string, params ImageGenerateParams) (*ImageResponse, error) {
 	body := struct {
 		Model string `json:"model"`
 		ImageGenerateParams
 	}{Model: model, ImageGenerateParams: params}
 
-	var resp ImageResponse
-	if err := s.client.doJSON(ctx, "/v1/images/generations", body, &resp); err != nil {
+	var submit imageJobResponse
+	if err := s.client.doJSON(ctx, "/v1/images/generations", body, &submit); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	if submit.ID == "" {
+		return nil, fmt.Errorf("runjobs: submit response missing job id")
+	}
+	return s.client.waitImageJob(ctx, "/v1/images/generations/"+submit.ID)
 }
 
 // Edit modifies an image given a prompt. The request is sent as multipart/form-data.
