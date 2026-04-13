@@ -120,6 +120,8 @@ edited, _ := client.Image.Edit(ctx, "GPT Image", runjobs.ImageEditParams{
 fmt.Printf("Cost: $%.6f\n", edited.Usage.TotalCost)
 ```
 
+`Image.Generate` and `Image.Edit` use the gateway's async job protocol internally: the client submits the job, polls every 2 s for completion, and downloads the resulting blob URLs. All polling is hidden — callers see the same `*ImageResponse` shape regardless of job duration, and the caller's `ctx` deadline (default 10 min) bounds the wait.
+
 ### Text-to-Speech & Speech-to-Text
 
 ```go
