@@ -160,9 +160,12 @@ func (s *ImageService) Edit(ctx context.Context, model string, params ImageEditP
 		}
 	}()
 
-	var resp ImageResponse
-	if err := s.client.doMultipart(ctx, "/v1/images/edits", pr, mw.FormDataContentType(), &resp); err != nil {
+	var submit imageJobResponse
+	if err := s.client.doMultipart(ctx, "/v1/images/edits", pr, mw.FormDataContentType(), &submit); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	if submit.ID == "" {
+		return nil, fmt.Errorf("runjobs: submit response missing job id")
+	}
+	return s.client.waitImageJob(ctx, "/v1/images/edits/"+submit.ID)
 }
