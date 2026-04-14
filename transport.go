@@ -210,7 +210,17 @@ type imageJobResponse struct {
 	Status string `json:"status"`
 	Error  string `json:"error,omitempty"`
 	Data   []struct {
-		URL           string `json:"url"`
+		URL string `json:"url,omitempty"`
+		// B64JSON is an optional inline result. When populated,
+		// assembleImageResponse uses it directly and skips the
+		// URL download. Middle-proxy gateways (e.g. runjobs-backend
+		// wrapping ai-gateway) that already have the bytes in
+		// memory set this so they don't need to run their own
+		// blob store just to satisfy waitImageJob's URL contract.
+		// ai-gateway itself still emits URL only — the poll
+		// response there is small and links to a streamable blob
+		// endpoint by design.
+		B64JSON       string `json:"b64_json,omitempty"`
 		Size          string `json:"size,omitempty"`
 		RevisedPrompt string `json:"revised_prompt,omitempty"`
 	} `json:"data,omitempty"`
@@ -262,7 +272,11 @@ func (c *Client) waitImageJob(ctx context.Context, statusPath string) (*ImageRes
 }
 
 // assembleImageResponse converts a succeeded imageJobResponse into an
-// *ImageResponse, downloading each result image as base64.
+// *ImageResponse. Each result is either used from the inline
+// b64_json field (preferred) or downloaded from the url field as a
+// fallback. Inline b64 lets a middle-proxy that already has the
+// bytes skip a second HTTP hop, while the url path keeps ai-gateway's
+// design — small poll response, blob streamed separately — intact.
 func (c *Client) assembleImageResponse(ctx context.Context, status *imageJobResponse) (*ImageResponse, error) {
 	out := &ImageResponse{
 		Created: time.Now().Unix(),
@@ -276,9 +290,13 @@ func (c *Client) assembleImageResponse(ctx context.Context, status *imageJobResp
 		},
 	}
 	for i, d := range status.Data {
-		b64, err := c.downloadBlobAsB64(ctx, d.URL)
-		if err != nil {
-			return nil, fmt.Errorf("runjobs: fetch result image %d: %w", i, err)
+		b64 := d.B64JSON
+		if b64 == "" {
+			var err error
+			b64, err = c.downloadBlobAsB64(ctx, d.URL)
+			if err != nil {
+				return nil, fmt.Errorf("runjobs: fetch result image %d: %w", i, err)
+			}
 		}
 		out.Data[i] = ImageResult{
 			B64JSON:       b64,
