@@ -37,6 +37,14 @@ type VideoGenerateParams struct {
 	ReferenceImagesB64 []string `json:"reference_images_b64,omitempty"`
 	ReferenceVideoURLs []string `json:"reference_video_urls,omitempty"`
 	ReferenceAudioURLs []string `json:"reference_audio_urls,omitempty"`
+	// SourceVideoURL is the *single* clip to be edited by a video-edit
+	// model (Aliyun wan2.7-videoedit). Distinct from ReferenceVideoURLs
+	// (Seedance "match motion / cinematography of these clips" — multiple,
+	// content untouched): the source video's content gets MODIFIED per
+	// the prompt + reference images, with timing / camera / audio
+	// preserved. Must be a publicly-reachable HTTP(S) URL (data: URIs
+	// not currently supported on this field).
+	SourceVideoURL string `json:"source_video_url,omitempty"`
 	// Output spec knobs.
 	Watermark       *bool `json:"watermark,omitempty"`
 	CameraFixed     *bool `json:"camera_fixed,omitempty"`
