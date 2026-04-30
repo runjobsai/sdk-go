@@ -19,6 +19,12 @@ type AudioService struct {
 // SpeechParams holds parameters for text-to-speech generation.
 // Emotion, Pitch, Volume, and Timber are supported by providers like MiniMax.
 // InstructText is supported by self-hosted voiceclone providers (CosyVoice family).
+//
+// Zero-shot voice cloning: when ReferenceAudioURL is set, voiceclone-capable
+// models ignore Voice and synthesize speech matching the timbre of the
+// referenced clip.  ReferenceText (a transcript of what's said in the
+// referenced audio) is optional but typically improves quality.  Nothing is
+// stored server-side — every call re-fetches the URL.
 type SpeechParams struct {
 	Input          string  `json:"input"`
 	Voice          string  `json:"voice"`
@@ -29,7 +35,16 @@ type SpeechParams struct {
 	Volume         float64 `json:"volume,omitempty"`        // 0.1 – 10.0 (1.0 = normal)
 	Timber         float64 `json:"timber,omitempty"`        // -12 to 12 (voice timbre shift)
 	InstructText   string  `json:"instruct_text,omitempty"` // free-form natural-language directive for voiceclone (CosyVoice). e.g. "用四川话快速地说"
-	User           string  `json:"user,omitempty"`
+	// ReferenceAudioURL points to a clip whose timbre the synth should
+	// match (zero-shot voice cloning).  When set, voiceclone-family
+	// providers ignore Voice and use this clip instead.  Provider must
+	// be able to fetch the URL — i.e. it must be reachable from the
+	// upstream service's network, not just the caller's.
+	ReferenceAudioURL string `json:"reference_audio_url,omitempty"`
+	// ReferenceText is the transcript of what's said in ReferenceAudioURL.
+	// Optional — improves CosyVoice zero-shot quality when supplied.
+	ReferenceText string `json:"reference_text,omitempty"`
+	User          string `json:"user,omitempty"`
 }
 
 // SpeechResponse holds the result of a text-to-speech request.
