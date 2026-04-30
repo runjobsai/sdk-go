@@ -22,6 +22,44 @@ type Model struct {
 	AvailableVoices    []string       `json:"available_voices,omitempty"`
 }
 
+// optBool reads a boolean flag from m.Options. Treats both bool true and
+// numeric 1 as true (admin UI may serialise either way).
+func (m Model) optBool(key string) bool {
+	if v, ok := m.Options[key].(bool); ok {
+		return v
+	}
+	if v, ok := m.Options[key].(float64); ok {
+		return v != 0
+	}
+	return false
+}
+
+// SupportsVoiceClone reports whether this TTS model accepts a reference
+// audio sample as the `voice` parameter on /v1/audio/speech. When true,
+// the `voice` field in SpeechParams may be:
+//   - an https:// URL to a wav file (≤30s of clean speech recommended), or
+//   - a data:audio/wav;base64,… URI (inline upload, ≤30s)
+//
+// Models without this flag only accept catalog voice IDs returned by
+// ListVoices. Set on text_to_speech models only; ignored on others.
+func (m Model) SupportsVoiceClone() bool { return m.optBool("supports_voice_clone") }
+
+// SupportsInstructText reports whether this TTS model accepts a free-form
+// natural-language style directive (SpeechParams.InstructText). Used by
+// CosyVoice-family voiceclone providers — the directive overrides any
+// emotion/speed/volume hints.
+func (m Model) SupportsInstructText() bool { return m.optBool("supports_instruct_text") }
+
+// DefaultVoice returns the model's configured default voice (admin-set
+// via Options.default_voice), or "" if unset. Useful for picking a voice
+// when the caller doesn't have a preference.
+func (m Model) DefaultVoice() string {
+	if v, ok := m.Options["default_voice"].(string); ok {
+		return v
+	}
+	return ""
+}
+
 // ModelService provides access to the gateway's model endpoints.
 type ModelService struct {
 	client *Client
