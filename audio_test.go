@@ -52,6 +52,10 @@ func TestAudioSpeech(t *testing.T) {
 	if gotBody["input"] != "Hello world" {
 		t.Fatalf("expected input 'Hello world', got %v", gotBody["input"])
 	}
+	// instruct_text omitempty: not sent when zero-valued.
+	if _, has := gotBody["instruct_text"]; has {
+		t.Fatalf("expected instruct_text omitted when empty, got %v", gotBody["instruct_text"])
+	}
 
 	if !bytes.Equal(resp.Data, audioBytes) {
 		t.Fatalf("decoded audio mismatch: got %d bytes", len(resp.Data))

@@ -18,15 +18,17 @@ type AudioService struct {
 
 // SpeechParams holds parameters for text-to-speech generation.
 // Emotion, Pitch, Volume, and Timber are supported by providers like MiniMax.
+// InstructText is supported by self-hosted voiceclone providers (CosyVoice family).
 type SpeechParams struct {
 	Input          string  `json:"input"`
 	Voice          string  `json:"voice"`
 	ResponseFormat string  `json:"response_format,omitempty"`
 	Speed          float64 `json:"speed,omitempty"`
-	Emotion        string  `json:"emotion,omitempty"`  // optional; use ListVoices().SupportedEmotions for valid values
-	Pitch          float64 `json:"pitch,omitempty"`    // -12 to 12 semitones
-	Volume         float64 `json:"volume,omitempty"`   // 0.1 – 10.0 (1.0 = normal)
-	Timber         float64 `json:"timber,omitempty"`   // -12 to 12 (voice timbre shift)
+	Emotion        string  `json:"emotion,omitempty"`       // optional; use ListVoices().SupportedEmotions for valid values
+	Pitch          float64 `json:"pitch,omitempty"`         // -12 to 12 semitones
+	Volume         float64 `json:"volume,omitempty"`        // 0.1 – 10.0 (1.0 = normal)
+	Timber         float64 `json:"timber,omitempty"`        // -12 to 12 (voice timbre shift)
+	InstructText   string  `json:"instruct_text,omitempty"` // free-form natural-language directive for voiceclone (CosyVoice). e.g. "用四川话快速地说"
 	User           string  `json:"user,omitempty"`
 }
 
