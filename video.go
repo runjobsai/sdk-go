@@ -37,14 +37,25 @@ type VideoGenerateParams struct {
 	ReferenceImagesB64 []string `json:"reference_images_b64,omitempty"`
 	ReferenceVideoURLs []string `json:"reference_video_urls,omitempty"`
 	ReferenceAudioURLs []string `json:"reference_audio_urls,omitempty"`
-	// SourceVideoURL is the *single* clip to be edited by a video-edit
-	// model (Aliyun wan2.7-videoedit). Distinct from ReferenceVideoURLs
-	// (Seedance "match motion / cinematography of these clips" — multiple,
-	// content untouched): the source video's content gets MODIFIED per
-	// the prompt + reference images, with timing / camera / audio
-	// preserved. Must be a publicly-reachable HTTP(S) URL (data: URIs
-	// not currently supported on this field).
+	// SourceVideoURL is the *single* clip that drives the output of a
+	// video-input model. Two flavours:
+	//   - video-edit (Aliyun wan2.7-videoedit): the source video's
+	//     content gets MODIFIED per the prompt + reference images, with
+	//     timing / camera / audio preserved. Distinct from
+	//     ReferenceVideoURLs (Seedance "match motion / cinematography of
+	//     these clips" — multiple, content untouched).
+	//   - motion-transfer (Aliyun wan2.2-animate-move): the source video
+	//     supplies a motion template that puppets the still subject in
+	//     SourceImageURL.
+	// Hosted HTTP(S) URLs and data: URIs are both accepted; the gateway
+	// stashes data: URIs as short-lived blobs before forwarding upstream.
 	SourceVideoURL string `json:"source_video_url,omitempty"`
+	// SourceImageURL is the *single* still image that drives the output
+	// of an image-input video model (wan2.2-animate-move: subject portrait
+	// to be puppeted by SourceVideoURL). Distinct from ReferenceImageURLs
+	// (multi-element generation guides) and FirstFrameURL (video keyframe).
+	// Hosted HTTP(S) URLs and data: URIs are both accepted.
+	SourceImageURL string `json:"source_image_url,omitempty"`
 	// Output spec knobs.
 	Watermark       *bool `json:"watermark,omitempty"`
 	CameraFixed     *bool `json:"camera_fixed,omitempty"`
