@@ -56,6 +56,13 @@ type VideoGenerateParams struct {
 	// (multi-element generation guides) and FirstFrameURL (video keyframe).
 	// Hosted HTTP(S) URLs and data: URIs are both accepted.
 	SourceImageURL string `json:"source_image_url,omitempty"`
+	// SourceAudioURL is the *single* audio clip that drives the output of
+	// an audio-input video model. wan2.7-t2v takes this as the dialogue
+	// the on-screen character speaks (lip-sync + duration alignment).
+	// Distinct from ReferenceAudioURLs (Seedance "match the soundtrack
+	// of these clips" — multiple, ambient).
+	// Hosted HTTP(S) URLs and data: URIs are both accepted.
+	SourceAudioURL string `json:"source_audio_url,omitempty"`
 	// Output spec knobs.
 	Watermark       *bool `json:"watermark,omitempty"`
 	CameraFixed     *bool `json:"camera_fixed,omitempty"`
