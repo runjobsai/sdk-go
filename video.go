@@ -2,6 +2,7 @@ package runjobs
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -150,6 +151,18 @@ func (s *VideoService) Generate(ctx context.Context, model string, params VideoG
 		VideoGenerateParams
 	}{Model: model, VideoGenerateParams: params}
 
+	var task VideoTask
+	if err := s.client.doJSON(ctx, "/v1/videos/generations", body, &task); err != nil {
+		return nil, err
+	}
+	return &task, nil
+}
+
+// GenerateRaw sends a pre-built JSON body to /v1/videos/generations.
+// Use this when you need to forward a request body verbatim — e.g. proxying
+// agent requests that may contain provider-specific fields outside
+// VideoGenerateParams (source_image_url for animate-move, etc).
+func (s *VideoService) GenerateRaw(ctx context.Context, body json.RawMessage) (*VideoTask, error) {
 	var task VideoTask
 	if err := s.client.doJSON(ctx, "/v1/videos/generations", body, &task); err != nil {
 		return nil, err
