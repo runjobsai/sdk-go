@@ -104,6 +104,18 @@ func (s *AudioService) Speech(ctx context.Context, model string, params SpeechPa
 		SpeechParams
 	}{Model: model, SpeechParams: params}
 
+	return s.speechRaw(ctx, body)
+}
+
+// SpeechRaw sends a pre-built JSON body to /v1/audio/speech.
+// Use this when you need to forward a request body verbatim — e.g.
+// proxying agent requests that may contain provider-specific fields
+// outside SpeechParams.
+func (s *AudioService) SpeechRaw(ctx context.Context, body json.RawMessage) (*SpeechResponse, error) {
+	return s.speechRaw(ctx, body)
+}
+
+func (s *AudioService) speechRaw(ctx context.Context, body any) (*SpeechResponse, error) {
 	var raw struct {
 		B64Audio    string `json:"b64_audio"`
 		ContentType string `json:"content_type"`
