@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
-	"net/url"
 )
 
 // AudioService provides access to the gateway's audio endpoints.
@@ -30,7 +29,10 @@ type SpeechParams struct {
 	Voice          string  `json:"voice"`
 	ResponseFormat string  `json:"response_format,omitempty"`
 	Speed          float64 `json:"speed,omitempty"`
-	Emotion        string  `json:"emotion,omitempty"`       // optional; use ListVoices().SupportedEmotions for valid values
+	// Emotion is provider-specific. Inspect the chosen TTS model on
+	// the /v1/models response (Models service) — its
+	// options.supported_emotions array enumerates the legal values.
+	Emotion string `json:"emotion,omitempty"`
 	Pitch          float64 `json:"pitch,omitempty"`         // -12 to 12 semitones
 	Volume         float64 `json:"volume,omitempty"`        // 0.1 – 10.0 (1.0 = normal)
 	Timber         float64 `json:"timber,omitempty"`        // -12 to 12 (voice timbre shift)
@@ -54,30 +56,11 @@ type SpeechResponse struct {
 	Usage       Usage  `json:"usage"`
 }
 
-// Voice describes a single voice available for text-to-speech.
-type Voice struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Gender   string `json:"gender,omitempty"`
-	Language string `json:"language,omitempty"`
-}
-
-// VoiceCatalog holds the full response from ListVoices, including voices
-// and optional model capabilities like supported emotions.
-type VoiceCatalog struct {
-	Voices            []Voice  `json:"voices"`
-	SupportedEmotions []string `json:"supported_emotions,omitempty"`
-}
-
-// ListVoices returns the available voices and capabilities for the given TTS model.
-func (s *AudioService) ListVoices(ctx context.Context, model string) (*VoiceCatalog, error) {
-	path := "/v1/audio/voices?model=" + url.QueryEscape(model)
-	var resp VoiceCatalog
-	if err := s.client.doGet(ctx, path, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
+// (Removed: Voice, VoiceCatalog, AudioService.ListVoices — voice metadata
+// is now exposed entirely through /v1/models. Each text_to_speech model
+// row carries `options.voices` and `options.supported_emotions`; pull the
+// catalog via Client.Models.Get(ctx, modelName) and read those fields off
+// the returned Model.Options map.)
 
 // TranscribeParams holds parameters for audio transcription.
 type TranscribeParams struct {

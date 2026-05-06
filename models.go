@@ -40,8 +40,8 @@ func (m Model) optBool(key string) bool {
 //   - an https:// URL to a wav file (≤30s of clean speech recommended), or
 //   - a data:audio/wav;base64,… URI (inline upload, ≤30s)
 //
-// Models without this flag only accept catalog voice IDs returned by
-// ListVoices. Set on text_to_speech models only; ignored on others.
+// Models without this flag only accept catalog voice IDs from the model's
+// Options.voices array. Set on text_to_speech models only; ignored elsewhere.
 func (m Model) SupportsVoiceClone() bool { return m.optBool("supports_voice_clone") }
 
 // SupportsInstructText reports whether this TTS model accepts a free-form

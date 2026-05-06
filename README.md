@@ -125,13 +125,21 @@ fmt.Printf("Cost: $%.6f\n", edited.Usage.TotalCost)
 ### Text-to-Speech & Speech-to-Text
 
 ```go
-// List voices and supported emotions for a TTS model
-catalog, _ := client.Audio.ListVoices(ctx, "MiniMax Speech 2.6 HD")
-for _, v := range catalog.Voices {
-    fmt.Printf("%s  %s  %s  %s\n", v.ID, v.Name, v.Gender, v.Language)
+// Voice metadata (id, name, gender, preview_url, supported_emotions) is
+// carried on the model row itself — fetch via Models.Get and read off
+// the Options map.
+m, _ := client.Models.Get(ctx, "MiniMax Speech 2.6 HD")
+if voices, ok := m.Options["voices"].([]any); ok {
+    for _, v := range voices {
+        if vm, ok := v.(map[string]any); ok {
+            fmt.Printf("%s  %s  %s  %s\n", vm["id"], vm["name"], vm["gender"], vm["language"])
+        }
+    }
 }
-fmt.Println("Emotions:", catalog.SupportedEmotions)
-// e.g. ["happy", "sad", "angry", "fearful", "disgusted", "surprised", "calm", "whisper"]
+if emotions, ok := m.Options["supported_emotions"].([]any); ok {
+    fmt.Println("Emotions:", emotions)
+    // e.g. ["happy", "sad", "angry", "fearful", "disgusted", "surprised", "calm", "whisper"]
+}
 
 // TTS (basic)
 speech, _ := client.Audio.Speech(ctx, "OpenAI/TTS", runjobs.SpeechParams{
@@ -225,7 +233,7 @@ if errors.As(err, &apiErr) {
 | `client.Chat` | `New`, `NewStreaming` | OpenAI-compatible chat completions |
 | `client.Models` | `List` | Model catalog with pricing and capabilities |
 | `client.Image` | `Generate`, `Edit`, `GenerateAsync`, `EditAsync` | Image generation and editing |
-| `client.Audio` | `ListVoices`, `Speech`, `Transcribe` | Voice catalog, text-to-speech, and speech-to-text |
+| `client.Audio` | `Speech`, `Transcribe` | Text-to-speech and speech-to-text (voice catalog now on the model row via `Models.Get`) |
 | `client.Video` | `Generate`, `GetStatus`, `Wait`, `GetContent` | Async video generation |
 | `client.Computer` | `Step` | Computer use (AI GUI control) |
 
