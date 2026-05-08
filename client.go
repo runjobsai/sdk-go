@@ -12,6 +12,7 @@ type Client struct {
 	Audio    *AudioService
 	Video    *VideoService
 	Computer *ComputerService
+	Files    *FilesService
 
 	baseURL    string
 	apiKey     string
@@ -45,5 +46,6 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 	c.Audio = &AudioService{client: c}
 	c.Video = &VideoService{client: c}
 	c.Computer = &ComputerService{client: c}
+	c.Files = &FilesService{client: c}
 	return c
 }
