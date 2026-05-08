@@ -22,20 +22,23 @@ type VideoGenerateParams struct {
 	Duration      int    `json:"duration,omitempty"`
 	Resolution    string `json:"resolution,omitempty"`
 	GenerateAudio *bool  `json:"generate_audio,omitempty"`
-	// First/last frame keyframes (image-to-video). Either a publicly
-	// hosted URL or raw base64 — the gateway stashes b64 inputs as
-	// short-lived blobs so the upstream sees a URL.
+	// First/last frame keyframes (image-to-video). Accept any of:
+	//   - hosted https:// URL
+	//   - data:image/...;base64,<payload> URI (use EncodeImageURL)
+	//
+	// The gateway stashes data: URIs as short-lived blobs before
+	// forwarding so the upstream sees a hosted URL either way. Raw
+	// base64 (without the data: prefix) is no longer accepted — the
+	// previous *_b64 sibling fields were removed; wrap your bytes in a
+	// data: URI client-side via EncodeImageURL instead.
 	FirstFrameURL string `json:"first_frame_url,omitempty"`
 	LastFrameURL  string `json:"last_frame_url,omitempty"`
-	FirstFrameB64 string `json:"first_frame_b64,omitempty"`
-	LastFrameB64  string `json:"last_frame_b64,omitempty"`
 	// Multimodal reference inputs (Seedance 2.0): up to 9 reference
 	// images, up to 3 reference videos (≤15s total), up to 3 reference
-	// audios (≤15s total). Reference images may be data: URIs; the
-	// gateway will materialise them. Reference videos / audios must be
-	// hosted URLs (or data URIs that the gateway can stash).
+	// audios (≤15s total). Each entry can be an https:// URL or a
+	// data: URI; the gateway materialises data: URIs as short-lived
+	// blobs before forwarding upstream.
 	ReferenceImageURLs []string `json:"reference_image_urls,omitempty"`
-	ReferenceImagesB64 []string `json:"reference_images_b64,omitempty"`
 	ReferenceVideoURLs []string `json:"reference_video_urls,omitempty"`
 	ReferenceAudioURLs []string `json:"reference_audio_urls,omitempty"`
 	// SourceVideoURL is the *single* clip that drives the output of a
