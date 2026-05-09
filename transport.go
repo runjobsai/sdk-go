@@ -3,7 +3,6 @@ package runjobs
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -210,17 +209,14 @@ type imageJobResponse struct {
 	Status string `json:"status"`
 	Error  string `json:"error,omitempty"`
 	Data   []struct {
-		URL string `json:"url,omitempty"`
-		// B64JSON is an optional inline result. When populated,
-		// assembleImageResponse uses it directly and skips the
-		// URL download. Middle-proxy gateways (e.g. runjobs-backend
-		// wrapping ai-gateway) that already have the bytes in
-		// memory set this so they don't need to run their own
-		// blob store just to satisfy waitImageJob's URL contract.
-		// ai-gateway itself still emits URL only — the poll
-		// response there is small and links to a streamable blob
-		// endpoint by design.
-		B64JSON       string `json:"b64_json,omitempty"`
+		// URL is the only carrier for image bytes — either an
+		// "https://<gateway>/v1/blobs/<id>" hosted blob (async path,
+		// the typical case) OR a "data:<mime>;base64,..." URI
+		// (sync-style passthroughs where bytes ride inline). Both
+		// shapes are handled identically by DecodeMediaURL and by
+		// SDK consumers — the legacy b64_json sibling has been
+		// dropped, mirroring the gateway's URL-only response shape.
+		URL           string `json:"url,omitempty"`
 		Size          string `json:"size,omitempty"`
 		RevisedPrompt string `json:"revised_prompt,omitempty"`
 	} `json:"data,omitempty"`
@@ -272,12 +268,12 @@ func (c *Client) waitImageJob(ctx context.Context, statusPath string) (*ImageRes
 }
 
 // assembleImageResponse converts a succeeded imageJobResponse into an
-// *ImageResponse. Each result is either used from the inline
-// b64_json field (preferred) or downloaded from the url field as a
-// fallback. Inline b64 lets a middle-proxy that already has the
-// bytes skip a second HTTP hop, while the url path keeps ai-gateway's
-// design — small poll response, blob streamed separately — intact.
+// *ImageResponse. The URL field is passed through unchanged — callers
+// that want decoded bytes call DecodeMediaURL on each Data[i].URL.
+// This keeps the response cheap (no eager download of every blob)
+// while preserving symmetry with the gateway's URL-only wire shape.
 func (c *Client) assembleImageResponse(ctx context.Context, status *imageJobResponse) (*ImageResponse, error) {
+	_ = ctx // reserved for future per-result eager fetches if needed
 	out := &ImageResponse{
 		Created: time.Now().Unix(),
 		Data:    make([]ImageResult, len(status.Data)),
@@ -290,43 +286,11 @@ func (c *Client) assembleImageResponse(ctx context.Context, status *imageJobResp
 		},
 	}
 	for i, d := range status.Data {
-		b64 := d.B64JSON
-		if b64 == "" {
-			var err error
-			b64, err = c.downloadBlobAsB64(ctx, d.URL)
-			if err != nil {
-				return nil, fmt.Errorf("runjobs: fetch result image %d: %w", i, err)
-			}
-		}
 		out.Data[i] = ImageResult{
-			B64JSON:       b64,
+			URL:           d.URL,
 			Size:          d.Size,
 			RevisedPrompt: d.RevisedPrompt,
 		}
 	}
 	return out, nil
-}
-
-// downloadBlobAsB64 fetches the blob at the given full URL and returns it as
-// a base64-encoded string. The Authorization header is set for uniformity even
-// though the gateway's blob endpoint is unauthenticated.
-func (c *Client) downloadBlobAsB64(ctx context.Context, url string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("blob download: %s", resp.Status)
-	}
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(data), nil
 }

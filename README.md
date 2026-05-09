@@ -107,7 +107,11 @@ img, _ := client.Image.Generate(ctx, "MiniMax Image-01", runjobs.ImageGeneratePa
     Prompt: "a gopher painting",
     Size:   "1024x1024",
 })
-fmt.Println(len(img.Data[0].B64JSON)) // base64 image data
+// img.Data[0].URL is either "data:image/png;base64,..." (sync) or
+// "https://api.runjobs.ai/v1/blobs/<id>" (async). DecodeMediaURL
+// resolves either shape into raw bytes + mime.
+bytes, mime, _ := runjobs.DecodeMediaURL(ctx, img.Data[0].URL)
+fmt.Printf("Got %d bytes (%s)\n", len(bytes), mime)
 fmt.Printf("Cost: $%.6f\n", img.Usage.TotalCost)
 
 // Edit (multipart)

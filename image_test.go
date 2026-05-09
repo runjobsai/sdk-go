@@ -3,7 +3,6 @@ package runjobs
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,7 +29,7 @@ func TestImageGenerate(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{
 			"created": 1700000000,
-			"data": [{"b64_json": "aW1hZ2VkYXRh", "revised_prompt": "a cat sitting", "size": "1024x1024"}],
+			"data": [{"url": "data:image/png;base64,aW1hZ2VkYXRh", "revised_prompt": "a cat sitting", "size": "1024x1024"}],
 			"usage": {
 				"total_cost": 0.04,
 				"generated_images": 1,
@@ -61,8 +60,8 @@ func TestImageGenerate(t *testing.T) {
 	if len(resp.Data) != 1 {
 		t.Fatalf("expected 1 image, got %d", len(resp.Data))
 	}
-	if resp.Data[0].B64JSON != "aW1hZ2VkYXRh" {
-		t.Fatalf("unexpected b64_json: %s", resp.Data[0].B64JSON)
+	if resp.Data[0].URL != "data:image/png;base64,aW1hZ2VkYXRh" {
+		t.Fatalf("unexpected url: %s", resp.Data[0].URL)
 	}
 	if resp.Data[0].RevisedPrompt != "a cat sitting" {
 		t.Fatalf("unexpected revised prompt: %s", resp.Data[0].RevisedPrompt)
@@ -127,7 +126,7 @@ func TestImageEdit(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{
 			"created": 1700000000,
-			"data": [{"b64_json": "ZWRpdGVk"}],
+			"data": [{"url": "data:image/png;base64,ZWRpdGVk"}],
 			"usage": {"total_cost": 0.02}
 		}`)
 	}))
@@ -145,8 +144,8 @@ func TestImageEdit(t *testing.T) {
 	if len(resp.Data) != 1 {
 		t.Fatalf("expected 1 image, got %d", len(resp.Data))
 	}
-	if resp.Data[0].B64JSON != "ZWRpdGVk" {
-		t.Fatalf("unexpected b64_json: %s", resp.Data[0].B64JSON)
+	if resp.Data[0].URL != "data:image/png;base64,ZWRpdGVk" {
+		t.Fatalf("unexpected url: %s", resp.Data[0].URL)
 	}
 	if resp.Usage.TotalCost != 0.02 {
 		t.Fatalf("expected total_cost 0.02, got %f", resp.Usage.TotalCost)
@@ -202,9 +201,20 @@ func TestImageGenerateAsync_HappyPath(t *testing.T) {
 	if len(resp.Data) != 1 {
 		t.Fatalf("expected 1 image, got %d", len(resp.Data))
 	}
-	wantB64 := base64.StdEncoding.EncodeToString([]byte("PNGDATA"))
-	if resp.Data[0].B64JSON != wantB64 {
-		t.Errorf("B64JSON = %q, want %q", resp.Data[0].B64JSON, wantB64)
+	// SDK now passes the URL through unchanged — callers fetch bytes
+	// via DecodeMediaURL when they need them. The async path returns
+	// a hosted blob URL; verify it points where the gateway said.
+	if !strings.HasSuffix(resp.Data[0].URL, "/v1/blobs/imgout_fake.png") {
+		t.Errorf("URL = %q, expected to end with /v1/blobs/imgout_fake.png", resp.Data[0].URL)
+	}
+	// And DecodeMediaURL should resolve it back to the bytes the
+	// mock blob endpoint serves.
+	gotBytes, _, err := DecodeMediaURL(context.Background(), resp.Data[0].URL)
+	if err != nil {
+		t.Fatalf("DecodeMediaURL: %v", err)
+	}
+	if string(gotBytes) != "PNGDATA" {
+		t.Errorf("decoded bytes = %q, want %q", gotBytes, "PNGDATA")
 	}
 	if resp.Data[0].Size != "1024x1024" {
 		t.Errorf("Size = %q", resp.Data[0].Size)
@@ -288,9 +298,17 @@ func TestImageEditAsync_HappyPath(t *testing.T) {
 	if len(resp.Data) != 1 {
 		t.Fatalf("expected 1 image, got %d", len(resp.Data))
 	}
-	wantB64 := base64.StdEncoding.EncodeToString([]byte("EDITED"))
-	if resp.Data[0].B64JSON != wantB64 {
-		t.Errorf("B64JSON = %q, want %q", resp.Data[0].B64JSON, wantB64)
+	// Same as above — SDK passes URL through, caller decodes when
+	// needed. Verify the round-trip via DecodeMediaURL.
+	if !strings.HasSuffix(resp.Data[0].URL, "/v1/blobs/imgout_edit.png") {
+		t.Errorf("URL = %q, expected to end with /v1/blobs/imgout_edit.png", resp.Data[0].URL)
+	}
+	gotBytes, _, err := DecodeMediaURL(context.Background(), resp.Data[0].URL)
+	if err != nil {
+		t.Fatalf("DecodeMediaURL: %v", err)
+	}
+	if string(gotBytes) != "EDITED" {
+		t.Errorf("decoded bytes = %q, want %q", gotBytes, "EDITED")
 	}
 	if resp.Usage.TotalCost != 0.02 {
 		t.Errorf("TotalCost = %v", resp.Usage.TotalCost)

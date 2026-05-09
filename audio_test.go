@@ -29,9 +29,11 @@ func TestAudioSpeech(t *testing.T) {
 		json.Unmarshal(data, &gotBody)
 
 		w.Header().Set("Content-Type", "application/json")
+		// New unified shape: bytes ride inside a data: URI on
+		// audio_url; mime label is in the URI header (no separate
+		// content_type field).
 		fmt.Fprintf(w, `{
-			"b64_audio": %q,
-			"content_type": "audio/mpeg",
+			"audio_url": "data:audio/mpeg;base64,%s",
 			"usage": {"total_cost": 0.015}
 		}`, b64Audio)
 	}))

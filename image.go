@@ -42,8 +42,13 @@ type ImageResponse struct {
 // may produce images of different sizes — read this per-result rather than
 // assuming everything matches the request's `size` parameter.
 type ImageResult struct {
+	// URL carries the generated image bytes via one of two transport
+	// modes — both decoded by DecodeMediaURL to raw bytes:
+	//   - "https://api.runjobs.ai/v1/blobs/<id>"  (async, hosted blob)
+	//   - "data:image/png;base64,..."             (sync, inline)
+	// The legacy `b64_json` field was removed; clients that previously
+	// read .B64JSON should now call DecodeMediaURL(.URL).
 	URL           string `json:"url,omitempty"`
-	B64JSON       string `json:"b64_json,omitempty"`
 	RevisedPrompt string `json:"revised_prompt,omitempty"`
 	Size          string `json:"size,omitempty"`
 }

@@ -3,7 +3,6 @@ package runjobs
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -99,23 +98,25 @@ func (s *AudioService) SpeechRaw(ctx context.Context, body json.RawMessage) (*Sp
 }
 
 func (s *AudioService) speechRaw(ctx context.Context, body any) (*SpeechResponse, error) {
+	// Wire shape: {audio_url: "data:<mime>;base64,...", usage: ...}.
+	// The data: URI carries both the mime label and the base64 payload;
+	// DecodeMediaURL handles both data: URIs and (for forward compat,
+	// should the gateway ever switch to a hosted blob URL) http(s)
+	// URLs symmetrically.
 	var raw struct {
-		B64Audio    string `json:"b64_audio"`
-		ContentType string `json:"content_type"`
-		Usage       Usage  `json:"usage"`
+		AudioURL string `json:"audio_url"`
+		Usage    Usage  `json:"usage"`
 	}
 	if err := s.client.doJSON(ctx, "/v1/audio/speech", body, &raw); err != nil {
 		return nil, err
 	}
-
-	data, err := base64.StdEncoding.DecodeString(raw.B64Audio)
+	data, mime, err := DecodeMediaURL(ctx, raw.AudioURL)
 	if err != nil {
-		return nil, fmt.Errorf("runjobs: decode b64_audio: %w", err)
+		return nil, fmt.Errorf("runjobs: decode audio_url: %w", err)
 	}
-
 	return &SpeechResponse{
 		Data:        data,
-		ContentType: raw.ContentType,
+		ContentType: mime,
 		Usage:       raw.Usage,
 	}, nil
 }
