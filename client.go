@@ -6,13 +6,14 @@ const defaultBaseURL = "http://localhost:8081"
 
 // Client is the top-level RunJobs SDK client.
 type Client struct {
-	Chat     *ChatService
-	Models   *ModelService
-	Image    *ImageService
-	Audio    *AudioService
-	Video    *VideoService
-	Computer *ComputerService
-	Files    *FilesService
+	Chat       *ChatService
+	Models     *ModelService
+	Image      *ImageService
+	Audio      *AudioService
+	Video      *VideoService
+	Computer   *ComputerService
+	Files      *FilesService
+	Embeddings *EmbeddingsService
 
 	baseURL    string
 	apiKey     string
@@ -47,5 +48,6 @@ func NewClient(apiKey string, opts ...ClientOption) *Client {
 	c.Video = &VideoService{client: c}
 	c.Computer = &ComputerService{client: c}
 	c.Files = &FilesService{client: c}
+	c.Embeddings = &EmbeddingsService{client: c}
 	return c
 }
