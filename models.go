@@ -12,9 +12,10 @@ type Model struct {
 	Capability         string         `json:"capability"`
 	Provider           string         `json:"provider,omitempty"`
 	// CapabilityTags is a server-derived list of "what this model can
-	// actually do" labels (e.g. {ID:"t2v", Label:"文生视频"} +
-	// {ID:"i2v", Label:"图生视频"}). Use HasCapabilityTag for filter
-	// checks; iterate for display.
+	// actually do" labels (e.g. {ID:"t2v", Label:"Text-to-Video"} +
+	// {ID:"i2v", Label:"Image-to-Video"}). Use HasCapabilityTag for
+	// filter checks; iterate for display. Labels are in English —
+	// frontends localise on their side.
 	CapabilityTags     []Tag          `json:"capability_tags,omitempty"`
 	Options            map[string]any `json:"options,omitempty"`
 	InputPricePerMTok  int64          `json:"input_price_per_mtok"`
