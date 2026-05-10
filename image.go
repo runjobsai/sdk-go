@@ -51,6 +51,13 @@ type ImageResult struct {
 	URL           string `json:"url,omitempty"`
 	RevisedPrompt string `json:"revised_prompt,omitempty"`
 	Size          string `json:"size,omitempty"`
+	// Attribution is a human-readable credit line that the client SHOULD
+	// display alongside the image. Populated by stock-library models
+	// (Pexels) whose terms of service require crediting the photographer;
+	// AI-generation models leave it empty. Render verbatim — don't try to
+	// parse the format. Example:
+	//   "Photo by Jane Doe on Pexels (https://www.pexels.com/photo/12345/)"
+	Attribution string `json:"attribution,omitempty"`
 }
 
 // ImageUsage merges the gateway's billing fields with the upstream provider's

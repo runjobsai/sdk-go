@@ -219,6 +219,10 @@ type imageJobResponse struct {
 		URL           string `json:"url,omitempty"`
 		Size          string `json:"size,omitempty"`
 		RevisedPrompt string `json:"revised_prompt,omitempty"`
+		// Attribution is the credit line stock-photo providers (Pexels)
+		// require alongside displayed images. Empty for AI-generated
+		// results. See ImageResult.Attribution for full semantics.
+		Attribution string `json:"attribution,omitempty"`
 	} `json:"data,omitempty"`
 	Usage imageJobUsage `json:"usage"`
 }
@@ -290,6 +294,7 @@ func (c *Client) assembleImageResponse(ctx context.Context, status *imageJobResp
 			URL:           d.URL,
 			Size:          d.Size,
 			RevisedPrompt: d.RevisedPrompt,
+			Attribution:   d.Attribution,
 		}
 	}
 	return out, nil
