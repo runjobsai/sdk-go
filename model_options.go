@@ -39,6 +39,36 @@ type Field struct {
 	Enum     []any    `json:"enum,omitempty"`
 	MaxItems *int     `json:"max_items,omitempty"`
 	Role     string   `json:"role,omitempty"`
+
+	// Display metadata — drives auto-rendered playground / form UIs.
+	// Optional; clients fall back to type/role-based rendering when
+	// absent. See API.md "Options schema" for the full vocabulary.
+
+	// Label is the human-readable display label (e.g. "Source Audio").
+	// Falls back to the field name when empty.
+	Label string `json:"label,omitempty"`
+
+	// Help is a one-sentence explainer rendered as tooltip / sub-text.
+	// Surfaces implicit constraints the structured schema can't
+	// capture (e.g. "audio must be 2–20 seconds").
+	Help string `json:"help,omitempty"`
+
+	// Widget overrides the default widget the renderer would pick
+	// from Type:
+	//   "textarea"     — large multi-line string
+	//   "slider"       — numeric with min/max
+	//   "radio"        — small enum
+	//   "voice_picker" — string with values from catalog.voices
+	//   "code"         — long string with syntax highlighting
+	// Empty → renderer uses the type-based default. Unknown widgets
+	// also fall back to the default (forward-compat).
+	Widget string `json:"widget,omitempty"`
+
+	// UI is a nested object for presentational hints not on
+	// dedicated fields. Reserved keys: "group" (string — sectional
+	// grouping like "main"/"advanced"/"output"), "order" (int —
+	// display order within the group; lower first).
+	UI map[string]any `json:"ui,omitempty"`
 }
 
 // Presence enumerates allowed values for Field.Presence.
