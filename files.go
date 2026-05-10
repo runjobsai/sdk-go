@@ -195,6 +195,30 @@ func (s *FilesService) List(ctx context.Context, opts ...ListOptions) (*FileList
 	return &res, nil
 }
 
+// DeleteMany removes every object whose path begins with `prefix`
+// AND (when set) matches `glob`.  Returns the number of objects
+// deleted.  At least one of `prefix` or `glob` must be non-empty.
+//
+//	client.Files.DeleteMany(ctx, "tmp/", "")          // wipe a "directory"
+//	client.Files.DeleteMany(ctx, "", "**/*.tmp")      // wipe every .tmp anywhere
+//	client.Files.DeleteMany(ctx, "projects/", "*.bak") // .bak files in projects/
+func (s *FilesService) DeleteMany(ctx context.Context, prefix, glob string) (int, error) {
+	body := map[string]string{}
+	if prefix != "" {
+		body["prefix"] = prefix
+	}
+	if glob != "" {
+		body["glob"] = glob
+	}
+	var res struct {
+		Deleted int `json:"deleted"`
+	}
+	if err := s.client.doJSON(ctx, "/v1/files/delete", body, &res); err != nil {
+		return 0, err
+	}
+	return res.Deleted, nil
+}
+
 // Move renames an object atomically (copy + delete server-side).
 func (s *FilesService) Move(ctx context.Context, from, to string) (*FileObject, error) {
 	body := map[string]string{"from": from, "to": to}
