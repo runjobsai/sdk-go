@@ -58,6 +58,16 @@ type ListOptions struct {
 	Prefix string
 	Cursor string
 	Limit  int
+	// Glob filters returned paths by a shell-style pattern.  S3 has
+	// no native glob — the gateway folds the literal head of the
+	// pattern into the underlying prefix scan, then post-filters in
+	// process.  Supports `*` (any chars except `/`), `**` (any chars),
+	// `?` (single non-slash), `[abc]` character classes.
+	//
+	//   List(ctx, ListOptions{Glob: "*.png"})
+	//   List(ctx, ListOptions{Glob: "projects/*/assets/*.png"})
+	//   List(ctx, ListOptions{Prefix: "projects/", Glob: "**/*.wav"})
+	Glob string
 }
 
 func (s *FilesService) pathToURL(p string) string {
@@ -170,6 +180,9 @@ func (s *FilesService) List(ctx context.Context, opts ...ListOptions) (*FileList
 	}
 	if o.Limit > 0 {
 		q.Set("limit", strconv.Itoa(o.Limit))
+	}
+	if o.Glob != "" {
+		q.Set("glob", o.Glob)
 	}
 	path := "/v1/files"
 	if qs := q.Encode(); qs != "" {
