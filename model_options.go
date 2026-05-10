@@ -84,20 +84,29 @@ const (
 type ConstraintKind string
 
 const (
-	AnyOfRequired     ConstraintKind = "any_of_required"
+	AnyOfRequired ConstraintKind = "any_of_required"
+	// MutuallyExclusive: at most one of Fields may be set. For
+	// block-level XOR (multiple fields per side) prefer GroupMutex.
 	MutuallyExclusive ConstraintKind = "mutually_exclusive"
-	RequiresAll       ConstraintKind = "requires_all"
-	PixelBounds       ConstraintKind = "pixel_bounds"
+	// GroupMutex: at most one of Groups may have any field set;
+	// fields inside the same group can co-exist freely. Used for
+	// keyframe-block vs reference-block XOR on Seedance/Veo.
+	GroupMutex  ConstraintKind = "group_mutex"
+	RequiresAll ConstraintKind = "requires_all"
+	PixelBounds ConstraintKind = "pixel_bounds"
 )
 
 // Constraint expresses a cross-field rule.
 type Constraint struct {
 	Kind   ConstraintKind `json:"kind"`
 	Fields []string       `json:"fields,omitempty"`
-	When   string         `json:"when,omitempty"`
-	Then   []string       `json:"then,omitempty"`
-	Min    *int64         `json:"min,omitempty"`
-	Max    *int64         `json:"max,omitempty"`
+	// Groups is used by GroupMutex: at most one group may have any
+	// field set; fields inside the same group can co-exist.
+	Groups [][]string `json:"groups,omitempty"`
+	When   string     `json:"when,omitempty"`
+	Then   []string   `json:"then,omitempty"`
+	Min    *int64     `json:"min,omitempty"`
+	Max    *int64     `json:"max,omitempty"`
 }
 
 // Catalog holds rich content that enum values can't capture.

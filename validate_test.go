@@ -224,6 +224,50 @@ func TestValidate_RequiresAll(t *testing.T) {
 	}
 }
 
+func TestValidate_GroupMutex(t *testing.T) {
+	// Seedance/Veo-style: keyframe block vs reference block. Inside
+	// a block the fields can co-exist; across blocks they cannot.
+	s := newSchema(map[string]*Field{
+		"first_frame_url":      {Type: "url", Presence: PresenceOptional},
+		"last_frame_url":       {Type: "url", Presence: PresenceOptional},
+		"reference_image_urls": {Type: "url[]", Presence: PresenceOptional},
+		"reference_video_urls": {Type: "url[]", Presence: PresenceOptional},
+	}, Constraint{
+		Kind: GroupMutex,
+		Groups: [][]string{
+			{"first_frame_url", "last_frame_url"},
+			{"reference_image_urls", "reference_video_urls"},
+		},
+	})
+
+	// Empty request → fine.
+	if errs := s.ValidateRequest(map[string]any{}); len(errs) != 0 {
+		t.Errorf("empty req should pass: %v", errs)
+	}
+	// Both fields in keyframe block → still fine (within-group co-exist).
+	if errs := s.ValidateRequest(map[string]any{
+		"first_frame_url": "https://x/a.png",
+		"last_frame_url":  "https://x/b.png",
+	}); len(errs) != 0 {
+		t.Errorf("within-group co-existence should pass: %v", errs)
+	}
+	// Both fields in reference block → still fine.
+	if errs := s.ValidateRequest(map[string]any{
+		"reference_image_urls": []any{"https://x/r1.png"},
+		"reference_video_urls": []any{"https://x/r1.mp4"},
+	}); len(errs) != 0 {
+		t.Errorf("within-group co-existence should pass: %v", errs)
+	}
+	// Across blocks → fail.
+	errs := s.ValidateRequest(map[string]any{
+		"first_frame_url":      "https://x/a.png",
+		"reference_image_urls": []any{"https://x/r1.png"},
+	})
+	if len(errs) == 0 {
+		t.Error("across-block use should fail")
+	}
+}
+
 func TestValidate_PixelBounds(t *testing.T) {
 	min, max := int64(1048576), int64(16777216) // 1MP – 16MP
 	s := newSchema(map[string]*Field{

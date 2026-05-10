@@ -195,6 +195,33 @@ func validateConstraint(c Constraint, req map[string]any) ValidationErrors {
 			}}
 		}
 
+	case GroupMutex:
+		// Active group = any field in the group is set.
+		var activeGroups [][]string
+		var activeFields []string
+		for _, g := range c.Groups {
+			groupActive := false
+			for _, name := range g {
+				if v, ok := req[name]; ok && !isEmpty(v) {
+					groupActive = true
+					activeFields = append(activeFields, name)
+				}
+			}
+			if groupActive {
+				activeGroups = append(activeGroups, g)
+			}
+		}
+		if len(activeGroups) > 1 {
+			labels := make([]string, len(c.Groups))
+			for i, g := range c.Groups {
+				labels[i] = "[" + strings.Join(g, "+") + "]"
+			}
+			return ValidationErrors{{
+				Field:  strings.Join(activeFields, "/"),
+				Reason: fmt.Sprintf("at most one of %s may be used (got: %s)", strings.Join(labels, " or "), strings.Join(activeFields, ", ")),
+			}}
+		}
+
 	case RequiresAll:
 		whenVal, whenOK := req[c.When]
 		if !whenOK || isEmpty(whenVal) {
