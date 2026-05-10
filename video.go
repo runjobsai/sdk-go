@@ -126,6 +126,12 @@ type VideoStatus struct {
 	UsageTokens *VideoUsageTokens `json:"usage_tokens,omitempty"`
 	CreatedAt   int64             `json:"created_at,omitempty"`
 	UpdatedAt   int64             `json:"updated_at,omitempty"`
+	// Attribution is a human-readable credit line that the client SHOULD
+	// display alongside the video. Populated by stock-library models
+	// (Pexels) whose terms of service require crediting the contributor;
+	// AI generators leave it empty. Render verbatim — see
+	// ImageResult.Attribution for the same convention.
+	Attribution string `json:"attribution,omitempty"`
 }
 
 // VideoUsageTokens carries the upstream-reported token counts surfaced on
