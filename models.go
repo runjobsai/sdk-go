@@ -11,6 +11,11 @@ type Model struct {
 	Object             string         `json:"object"`
 	Capability         string         `json:"capability"`
 	Provider           string         `json:"provider,omitempty"`
+	// CapabilityTags is a server-derived list of "what this model can
+	// actually do" labels (e.g. {ID:"t2v", Label:"文生视频"} +
+	// {ID:"i2v", Label:"图生视频"}). Use HasCapabilityTag for filter
+	// checks; iterate for display.
+	CapabilityTags     []Tag          `json:"capability_tags,omitempty"`
 	Options            map[string]any `json:"options,omitempty"`
 	InputPricePerMTok  int64          `json:"input_price_per_mtok"`
 	OutputPricePerMTok int64          `json:"output_price_per_mtok"`
@@ -20,6 +25,25 @@ type Model struct {
 	MaxInputTokens     int            `json:"max_input_tokens"`
 	IconURL            string         `json:"icon_url,omitempty"`
 	AvailableVoices    []string       `json:"available_voices,omitempty"`
+}
+
+// Tag is a derived capability label suitable for filter chips.
+// Mirrors options_schema.Tag on the gateway.
+type Tag struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+// HasCapabilityTag reports whether this model's CapabilityTags
+// includes a tag with the given stable ID. Use this for filter logic
+// — IDs are stable across releases, Labels are translatable.
+func (m Model) HasCapabilityTag(id string) bool {
+	for _, t := range m.CapabilityTags {
+		if t.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 // optBool reads a boolean flag from m.Options. Treats both bool true and

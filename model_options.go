@@ -3,16 +3,9 @@ package runjobs
 import "encoding/json"
 
 // Schema mirrors the wire shape of `options` returned by /v1/models —
-// see API.md "Options schema" for the full contract. The gateway's
-// materialiser populates this from the legacy flat-key options blob
-// at response time; SDK clients consume it as the single source of
-// truth for what each model accepts.
+// see API.md "Options schema" for the full contract. SDK clients
+// consume it as the single source of truth for what each model accepts.
 type Schema struct {
-	// Version is monotonically incremented when the wire shape
-	// changes incompatibly. SDKs should refuse to validate against
-	// an unknown Version (currently always 1).
-	Version int `json:"version"`
-
 	// Inputs maps canonical request field names (matching the JSON
 	// tags on Image/Video/Speech/Embed/Transcribe params) to per-
 	// field constraints. A field absent from the map is NOT accepted
@@ -117,7 +110,7 @@ type Catalog struct {
 
 // OptionsSchema parses the model's wire-format `options` blob into
 // the typed Schema. Returns nil + an error if the blob is malformed
-// or carries a Version newer than this SDK supports — caller can
+// or its inner shape can't be parsed — caller can
 // fall back to whatever default behaviour they had pre-schema.
 //
 // The Model.Options field stays as `map[string]any` for backwards

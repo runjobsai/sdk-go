@@ -9,7 +9,7 @@ import (
 
 // helper: build a Schema literal in a one-liner.
 func newSchema(inputs map[string]*Field, constraints ...Constraint) *Schema {
-	return &Schema{Version: 1, Inputs: inputs, Constraints: constraints}
+	return &Schema{Inputs: inputs, Constraints: constraints}
 }
 
 // ─── Per-field validation ────────────────────────────────────────────
@@ -404,9 +404,6 @@ func TestModel_OptionsSchema(t *testing.T) {
 	}
 	if s == nil {
 		t.Fatal("schema should not be nil")
-	}
-	if s.Version != 1 {
-		t.Errorf("version=%d, want 1", s.Version)
 	}
 	f, ok := s.Inputs["prompt"]
 	if !ok {
