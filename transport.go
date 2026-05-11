@@ -202,6 +202,11 @@ func messageFromRaw(raw json.RawMessage) string {
 var (
 	imagePollFirstDelay = 2 * time.Second
 	imagePollInterval   = 2 * time.Second
+	// speech polling shares the same shape but a slightly slower
+	// cadence — TTS / music jobs typically take 10–60s, so faster
+	// polling just burns request quota without shortening latency.
+	speechPollFirstDelay = 2 * time.Second
+	speechPollInterval   = 3 * time.Second
 )
 
 type imageJobResponse struct {
@@ -267,6 +272,64 @@ func (c *Client) waitImageJob(ctx context.Context, statusPath string) (*ImageRes
 			timer.Reset(imagePollInterval)
 		default:
 			return nil, fmt.Errorf("runjobs: unknown job status %q", status.Status)
+		}
+	}
+}
+
+// speechJobResponse mirrors the gateway's GET /v1/async/audio/speech/:id
+// shape: status flips queued → running → succeeded|failed; on success
+// the audio_url field carries a `data:<mime>;base64,...` URI matching
+// the sync /v1/audio/speech response.
+type speechJobResponse struct {
+	ID       string `json:"id"`
+	Status   string `json:"status"`
+	Error    string `json:"error,omitempty"`
+	AudioURL string `json:"audio_url,omitempty"`
+	Usage    Usage  `json:"usage"`
+}
+
+// waitSpeechJob polls statusPath until the job reaches a terminal
+// state, then decodes the result data: URI into raw bytes + mime.
+// Same context / deadline conventions as waitImageJob — callers can
+// cap total wait via ctx.Deadline; absent that, a 10-minute internal
+// timeout applies (long enough for the slowest ACE-Step jobs).
+func (c *Client) waitSpeechJob(ctx context.Context, statusPath string) (*SpeechResponse, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Minute)
+		defer cancel()
+	}
+
+	timer := time.NewTimer(speechPollFirstDelay)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+
+		var status speechJobResponse
+		if err := c.doGet(ctx, statusPath, &status); err != nil {
+			return nil, err
+		}
+		switch status.Status {
+		case "succeeded":
+			data, mime, err := DecodeMediaURL(ctx, status.AudioURL)
+			if err != nil {
+				return nil, fmt.Errorf("runjobs: decode audio_url: %w", err)
+			}
+			return &SpeechResponse{
+				Data:        data,
+				ContentType: mime,
+				Usage:       status.Usage,
+			}, nil
+		case "failed":
+			return nil, &APIError{StatusCode: 502, Type: "speech_job_failed", Message: status.Error}
+		case "queued", "running":
+			timer.Reset(speechPollInterval)
+		default:
+			return nil, fmt.Errorf("runjobs: unknown speech job status %q", status.Status)
 		}
 	}
 }

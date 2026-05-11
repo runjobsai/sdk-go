@@ -46,6 +46,14 @@ type SpeechParams struct {
 	// Optional — improves CosyVoice zero-shot quality when supplied.
 	ReferenceText string `json:"reference_text,omitempty"`
 	User          string `json:"user,omitempty"`
+
+	// Extra carries vendor-specific top-level fields the canonical
+	// SpeechParams doesn't model. Used for music-generation models on
+	// the TTS bucket: ACE-Step needs `tags` (genre, required),
+	// `duration`, `seed`, `scheduler`, `guidance_*` etc. The SDK
+	// spreads Extra at the request body's TOP LEVEL (not nested) —
+	// matches the gateway's extractSpeechExtra contract.
+	Extra map[string]any `json:"-"`
 }
 
 // SpeechResponse holds the result of a text-to-speech request.
@@ -81,12 +89,65 @@ type TranscribeResponse struct {
 
 // Speech generates audio from text using the specified model.
 func (s *AudioService) Speech(ctx context.Context, model string, params SpeechParams) (*SpeechResponse, error) {
-	body := struct {
+	body, err := buildSpeechBody(model, params)
+	if err != nil {
+		return nil, err
+	}
+	return s.speechRaw(ctx, body)
+}
+
+// SpeechAsync is the async equivalent of Speech. It submits the job
+// to the gateway's async TTS endpoint, polls until terminal, then
+// decodes the result audio_url. Use this variant when a request is
+// expected to run longer than ~100s — ACE-Step music generation at
+// high settings, large CosyVoice batches, etc. The sync Speech
+// method is the right choice for anything that fits inside
+// Cloudflare's origin timeout (most short-clip TTS), since it skips
+// the submit + poll round-trips.
+//
+// Returns the same *SpeechResponse shape as Speech — Data + Usage —
+// so callers can swap the two methods with no other change.
+func (s *AudioService) SpeechAsync(ctx context.Context, model string, params SpeechParams) (*SpeechResponse, error) {
+	body, err := buildSpeechBody(model, params)
+	if err != nil {
+		return nil, err
+	}
+	var submit speechJobResponse
+	if err := s.client.doJSON(ctx, "/v1/async/audio/speech", body, &submit); err != nil {
+		return nil, err
+	}
+	if submit.ID == "" {
+		return nil, fmt.Errorf("runjobs: speech submit response missing job id")
+	}
+	return s.client.waitSpeechJob(ctx, "/v1/async/audio/speech/"+submit.ID)
+}
+
+// buildSpeechBody marshals canonical SpeechParams plus a model name
+// AND any Extra vendor fields, all at the request body's top level.
+// The gateway's extractSpeechExtra peels non-canonical top-level
+// fields back into req.Extra on the server side, so the round-trip
+// is symmetric.
+func buildSpeechBody(model string, params SpeechParams) (map[string]any, error) {
+	canonical, err := json.Marshal(struct {
 		Model string `json:"model"`
 		SpeechParams
-	}{Model: model, SpeechParams: params}
-
-	return s.speechRaw(ctx, body)
+	}{Model: model, SpeechParams: params})
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{}
+	if err := json.Unmarshal(canonical, &body); err != nil {
+		return nil, err
+	}
+	// Spread Extra at root. Canonical fields win — never let Extra
+	// silently override a typed field.
+	for k, v := range params.Extra {
+		if _, claimed := body[k]; claimed {
+			continue
+		}
+		body[k] = v
+	}
+	return body, nil
 }
 
 // SpeechRaw sends a pre-built JSON body to /v1/audio/speech.

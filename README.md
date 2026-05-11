@@ -251,6 +251,16 @@ speech, _ = client.Audio.Speech(ctx, "MiniMax Speech 2.6 HD", runjobs.SpeechPara
     Emotion: "happy", // optional; omit to let the model auto-detect
 })
 
+// TTS — async variant (use when generation can take longer than ~100s,
+// e.g. ACE-Step music at high quality / large CosyVoice batches).
+// Returns the same *SpeechResponse shape as Speech, after submit + poll.
+song, _ := client.Audio.SpeechAsync(ctx, "ACE-Step", runjobs.SpeechParams{
+    Input: "[verse]\nUnder the stars tonight",
+    Extra: map[string]any{"tags": "indie rock, melancholic", "duration": 60},
+})
+os.WriteFile("song.wav", song.Data, 0644)
+fmt.Printf("Cost: $%.6f\n", song.Usage.TotalCost)
+
 // STT
 audio, _ := os.Open("recording.mp3")
 defer audio.Close()
@@ -329,7 +339,7 @@ if errors.As(err, &apiErr) {
 | `client.Chat` | `New`, `NewStreaming` | OpenAI-compatible chat completions |
 | `client.Models` | `List` | Model catalog with pricing, capability tags, and options schema |
 | `client.Image` | `Generate`, `Edit`, `GenerateAsync`, `EditAsync` | Image generation and editing |
-| `client.Audio` | `Speech`, `Transcribe` | Text-to-speech and speech-to-text (voice catalog on the model's `OptionsSchema().Catalog`) |
+| `client.Audio` | `Speech`, `SpeechAsync`, `Transcribe` | Text-to-speech (sync + async submit/poll for >100s jobs) and speech-to-text (voice catalog on the model's `OptionsSchema().Catalog`) |
 | `client.Video` | `Generate`, `GetStatus`, `Wait`, `GetContent` | Async video generation |
 | `client.Computer` | `Step` | Computer use (AI GUI control) |
 
