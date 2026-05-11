@@ -184,11 +184,52 @@ func (s *AudioService) speechRaw(ctx context.Context, body any) (*SpeechResponse
 
 // Transcribe transcribes audio using the specified model.
 func (s *AudioService) Transcribe(ctx context.Context, model string, params TranscribeParams) (*TranscribeResponse, error) {
+	buf, contentType, err := buildTranscribeMultipart(model, params)
+	if err != nil {
+		return nil, err
+	}
+	var rawMsg json.RawMessage
+	if err := s.client.doMultipart(ctx, "/v1/audio/transcriptions", buf, contentType, &rawMsg); err != nil {
+		return nil, err
+	}
+	return decodeTranscribeResponse(rawMsg)
+}
+
+// TranscribeAsync is the async equivalent of Transcribe. Submits the
+// upload, polls until terminal, returns the same *TranscribeResponse.
+// Use this for long audio (lectures, podcasts, multi-hour recordings)
+// where Whisper can take minutes — well past Cloudflare's 100s sync
+// ceiling.
+//
+// Caller's ctx deadline bounds the poll wait; absent a deadline a
+// 10-minute internal cap applies.
+func (s *AudioService) TranscribeAsync(ctx context.Context, model string, params TranscribeParams) (*TranscribeResponse, error) {
+	buf, contentType, err := buildTranscribeMultipart(model, params)
+	if err != nil {
+		return nil, err
+	}
+	var submit struct {
+		ID     string `json:"id"`
+		Status string `json:"status"`
+	}
+	if err := s.client.doMultipart(ctx, "/v1/async/audio/transcriptions", buf, contentType, &submit); err != nil {
+		return nil, err
+	}
+	if submit.ID == "" {
+		return nil, fmt.Errorf("runjobs: transcribe submit response missing job id")
+	}
+	return s.client.waitTranscribeJob(ctx, "/v1/async/audio/transcriptions/"+submit.ID)
+}
+
+// buildTranscribeMultipart assembles the multipart body shared by the
+// sync and async submit paths. Returns the buffered body + the
+// Content-Type header (carries the multipart boundary).
+func buildTranscribeMultipart(model string, params TranscribeParams) (*bytes.Buffer, string, error) {
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
 
 	if err := w.WriteField("model", model); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	filename := params.Filename
@@ -197,62 +238,62 @@ func (s *AudioService) Transcribe(ctx context.Context, model string, params Tran
 	}
 	fw, err := w.CreateFormFile("file", filename)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if _, err := io.Copy(fw, params.File); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if params.Language != "" {
 		if err := w.WriteField("language", params.Language); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
 	if params.Prompt != "" {
 		if err := w.WriteField("prompt", params.Prompt); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
 	if params.ResponseFormat != "" {
 		if err := w.WriteField("response_format", params.ResponseFormat); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
 	for _, tg := range params.TimestampGranularities {
 		if err := w.WriteField("timestamp_granularities[]", tg); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
 	if params.User != "" {
 		if err := w.WriteField("user", params.User); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
 
 	if err := w.Close(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
+	return &buf, w.FormDataContentType(), nil
+}
 
-	var rawMsg json.RawMessage
-	if err := s.client.doMultipart(ctx, "/v1/audio/transcriptions", &buf, w.FormDataContentType(), &rawMsg); err != nil {
-		return nil, err
-	}
-
+// decodeTranscribeResponse unmarshals the JSON response from /v1/audio/
+// transcriptions (and the success state of the async sibling) into a
+// typed TranscribeResponse, populating Raw with everything that isn't
+// canonical text/usage/id/status.
+func decodeTranscribeResponse(rawMsg json.RawMessage) (*TranscribeResponse, error) {
 	var resp TranscribeResponse
 	if err := json.Unmarshal(rawMsg, &resp); err != nil {
 		return nil, fmt.Errorf("runjobs: decode transcription: %w", err)
 	}
-
-	// Parse all fields into a map, then remove text and usage to populate Raw.
 	var all map[string]any
 	if err := json.Unmarshal(rawMsg, &all); err != nil {
 		return nil, fmt.Errorf("runjobs: decode transcription raw: %w", err)
 	}
-	delete(all, "text")
-	delete(all, "usage")
+	for _, drop := range []string{"text", "usage", "id", "status"} {
+		delete(all, drop)
+	}
 	if len(all) > 0 {
 		resp.Raw = all
 	}
-
 	return &resp, nil
 }

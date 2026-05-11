@@ -334,6 +334,49 @@ func (c *Client) waitSpeechJob(ctx context.Context, statusPath string) (*SpeechR
 	}
 }
 
+// waitTranscribeJob polls statusPath until terminal, then assembles a
+// *TranscribeResponse from the final payload. Same context / deadline
+// rules as waitImageJob — caller's ctx.Deadline bounds the wait;
+// without one, a 10-minute internal cap applies.
+func (c *Client) waitTranscribeJob(ctx context.Context, statusPath string) (*TranscribeResponse, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Minute)
+		defer cancel()
+	}
+	timer := time.NewTimer(speechPollFirstDelay)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+
+		var rawMsg json.RawMessage
+		if err := c.doGet(ctx, statusPath, &rawMsg); err != nil {
+			return nil, err
+		}
+		var head struct {
+			Status string `json:"status"`
+			Error  string `json:"error,omitempty"`
+		}
+		if err := json.Unmarshal(rawMsg, &head); err != nil {
+			return nil, fmt.Errorf("runjobs: decode transcribe job head: %w", err)
+		}
+		switch head.Status {
+		case "succeeded":
+			return decodeTranscribeResponse(rawMsg)
+		case "failed":
+			return nil, &APIError{StatusCode: 502, Type: "transcribe_job_failed", Message: head.Error}
+		case "queued", "running":
+			timer.Reset(speechPollInterval)
+		default:
+			return nil, fmt.Errorf("runjobs: unknown transcribe job status %q", head.Status)
+		}
+	}
+}
+
 // assembleImageResponse converts a succeeded imageJobResponse into an
 // *ImageResponse. The URL field is passed through unchanged — callers
 // that want decoded bytes call DecodeMediaURL on each Data[i].URL.

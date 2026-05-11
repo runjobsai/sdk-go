@@ -270,6 +270,19 @@ transcript, _ := client.Audio.Transcribe(ctx, "OpenAI/Whisper", runjobs.Transcri
 })
 fmt.Println(transcript.Text)
 fmt.Printf("Cost: $%.6f\n", transcript.Usage.TotalCost)
+
+// STT — async variant (use for long audio: lectures / podcasts /
+// multi-hour recordings where Whisper can take minutes). Same
+// TranscribeResponse shape as Transcribe.
+podcast, _ := os.Open("podcast-2h.mp3")
+defer podcast.Close()
+long, _ := client.Audio.TranscribeAsync(ctx, "OpenAI/Whisper", runjobs.TranscribeParams{
+    File:                   podcast,
+    Filename:               "podcast-2h.mp3",
+    ResponseFormat:         "verbose_json",
+    TimestampGranularities: []string{"segment"},
+})
+fmt.Println(long.Text)
 ```
 
 ### Video Generation (Async)
@@ -339,7 +352,7 @@ if errors.As(err, &apiErr) {
 | `client.Chat` | `New`, `NewStreaming` | OpenAI-compatible chat completions |
 | `client.Models` | `List` | Model catalog with pricing, capability tags, and options schema |
 | `client.Image` | `Generate`, `Edit`, `GenerateAsync`, `EditAsync` | Image generation and editing |
-| `client.Audio` | `Speech`, `SpeechAsync`, `Transcribe` | Text-to-speech (sync + async submit/poll for >100s jobs) and speech-to-text (voice catalog on the model's `OptionsSchema().Catalog`) |
+| `client.Audio` | `Speech`, `SpeechAsync`, `Transcribe`, `TranscribeAsync` | Text-to-speech and speech-to-text. Each has a sync method + an async submit/poll variant for jobs that exceed Cloudflare's 100s ceiling (long music, hour-plus audio). Voice catalog on the model's `OptionsSchema().Catalog` |
 | `client.Video` | `Generate`, `GetStatus`, `Wait`, `GetContent` | Async video generation |
 | `client.Computer` | `Step` | Computer use (AI GUI control) |
 
