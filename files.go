@@ -290,9 +290,44 @@ type BatchResult struct {
 	Exists *bool       `json:"exists,omitempty"`
 }
 
+// batchChunkSize is the per-request op cap the SDK enforces client-side.
+// The gateway rejects >64 with 400 "too many ops"; we cap at 30 so
+// callers can pass arbitrarily long slices without hitting that limit
+// (and so a future tightening on the server side stays headroom-safe).
+const batchChunkSize = 30
+
 // Batch executes ops sequentially in one round trip.  One op failing
 // does not abort the rest — inspect each BatchResult.OK individually.
+//
+// Auto-chunks: input slices longer than batchChunkSize are split and
+// dispatched in order; the merged result preserves the caller's index
+// order so result[i] always lines up with ops[i].  Chunks run
+// serially (not in parallel) to preserve the "operations execute in
+// submission order" contract — parallel would race overlapping ops on
+// the same path (put → delete → put).
 func (s *FilesService) Batch(ctx context.Context, ops []BatchOp) ([]BatchResult, error) {
+	if len(ops) == 0 {
+		return nil, nil
+	}
+	if len(ops) <= batchChunkSize {
+		return s.batchOne(ctx, ops)
+	}
+	all := make([]BatchResult, 0, len(ops))
+	for i := 0; i < len(ops); i += batchChunkSize {
+		end := i + batchChunkSize
+		if end > len(ops) {
+			end = len(ops)
+		}
+		part, err := s.batchOne(ctx, ops[i:end])
+		if err != nil {
+			return all, err
+		}
+		all = append(all, part...)
+	}
+	return all, nil
+}
+
+func (s *FilesService) batchOne(ctx context.Context, ops []BatchOp) ([]BatchResult, error) {
 	body := map[string]any{"ops": ops}
 	var resp struct {
 		Results []BatchResult `json:"results"`
