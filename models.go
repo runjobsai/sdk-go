@@ -17,6 +17,14 @@ type Model struct {
 	// filter checks; iterate for display. Labels are in English —
 	// frontends localise on their side.
 	CapabilityTags     []Tag          `json:"capability_tags,omitempty"`
+	// InputModalities lists the input shapes a chat model accepts —
+	// some subset of {"text", "image", "video", "audio"}. Empty / nil
+	// on non-chat capabilities (image generation, TTS, STT, etc.).
+	// Mirrors Anthropic / Gemini's own inputModalities field — the
+	// gateway exposes operator-declared values verbatim, so the list
+	// is open and future modality strings ride through without an SDK
+	// upgrade. Use AcceptsModality for stable filter checks.
+	InputModalities    []string       `json:"input_modalities,omitempty"`
 	Options            map[string]any `json:"options,omitempty"`
 	InputPricePerMTok  int64          `json:"input_price_per_mtok"`
 	OutputPricePerMTok int64          `json:"output_price_per_mtok"`
@@ -41,6 +49,23 @@ type Tag struct {
 func (m Model) HasCapabilityTag(id string) bool {
 	for _, t := range m.CapabilityTags {
 		if t.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// AcceptsModality reports whether the chat model declares support for
+// the given input modality (e.g. "image" / "video" / "audio"). Lets
+// callers pick the right model BEFORE sending a content part the
+// upstream can't handle — sending video to a Claude model still 400s,
+// but at least no tokens get billed.
+//
+// Returns false when InputModalities is unset — text-only is the
+// conservative default for capabilities that don't carry the field.
+func (m Model) AcceptsModality(modality string) bool {
+	for _, v := range m.InputModalities {
+		if v == modality {
 			return true
 		}
 	}

@@ -26,16 +26,39 @@ type ChatMessage struct {
 }
 
 // ContentPart is a single part of a multi-modal message content array.
+//
+// Type is the dispatch tag: "text" / "image_url" / "video_url" /
+// "audio_url". Exactly one of Text / ImageURL / VideoURL / AudioURL
+// is populated, matching Type. Multi-modal support (video / audio)
+// depends on the model — use Model.AcceptsModality to check before
+// sending. Gemini 3.x supports all four; Claude supports text +
+// image_url; OpenAI's gpt-4o family supports text + image_url.
 type ContentPart struct {
 	Type     string    `json:"type"`
 	Text     string    `json:"text,omitempty"`
 	ImageURL *ImageURL `json:"image_url,omitempty"`
+	VideoURL *VideoURL `json:"video_url,omitempty"`
+	AudioURL *AudioURL `json:"audio_url,omitempty"`
 }
 
 // ImageURL references an image by URL or base64 data URI.
 type ImageURL struct {
 	URL    string `json:"url"`
 	Detail string `json:"detail,omitempty"` // "auto" | "low" | "high"
+}
+
+// VideoURL references a video by URL or base64 data URI. Only models
+// whose InputModalities includes "video" (currently Gemini 3.x)
+// accept this — other models 400 at the gateway.
+type VideoURL struct {
+	URL string `json:"url"`
+}
+
+// AudioURL references an audio clip by URL or base64 data URI. Only
+// models whose InputModalities includes "audio" (currently Gemini
+// 3.x) accept this — other models 400 at the gateway.
+type AudioURL struct {
+	URL string `json:"url"`
 }
 
 // UserMessage creates a simple text user message.
@@ -75,6 +98,20 @@ func ImagePart(url string, detail ...string) ContentPart {
 		p.ImageURL.Detail = detail[0]
 	}
 	return p
+}
+
+// VideoPart creates a video_url content part. Only supported by chat
+// models whose InputModalities includes "video" (Gemini 3.x). url may
+// be an http(s) URL or a data:video/mp4;base64,… inline upload.
+func VideoPart(url string) ContentPart {
+	return ContentPart{Type: "video_url", VideoURL: &VideoURL{URL: url}}
+}
+
+// AudioPart creates an audio_url content part. Only supported by chat
+// models whose InputModalities includes "audio" (Gemini 3.x). url may
+// be an http(s) URL or a data:audio/wav;base64,… inline upload.
+func AudioPart(url string) ContentPart {
+	return ContentPart{Type: "audio_url", AudioURL: &AudioURL{URL: url}}
 }
 
 // ChatCompletionParams configures a chat completion request.

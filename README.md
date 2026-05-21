@@ -108,6 +108,50 @@ if m.HasCapabilityTag("first_last_frame") { /* show keyframe uploader */ }
 
 `Tag.Label` is English-only; localise on your side. Always filter on `Tag.ID`.
 
+#### `InputModalities` — what file types a chat model can analyse
+
+Chat models (`Capability` `"text"` or `"vision"`) carry an `InputModalities` field listing the input shapes they accept. Mirrors Anthropic's and Gemini's own `inputModalities` field — operator-set on the gateway, surfaced verbatim. Use it to pick the right model **before** sending a request instead of catching a 400.
+
+| Value | Meaning |
+|---|---|
+| `"text"` | Plain text in `Messages[].Content` (always implied for chat) |
+| `"image"` | `{Type:"image_url", ImageURL:&ImageURL{URL:…}}` content parts |
+| `"video"` | `{Type:"video_url", VideoURL:&VideoURL{URL:…}}` content parts |
+| `"audio"` | `{Type:"audio_url", AudioURL:&AudioURL{URL:…}}` content parts |
+
+The list is open — new modality strings ride through without an SDK upgrade. Use the `AcceptsModality` helper for stable checks:
+
+```go
+models, _ := client.Models.List(ctx, runjobs.WithCapability("text"))
+
+// Pick a video-capable model.
+var videoModel *runjobs.Model
+for i := range models {
+    if models[i].AcceptsModality("video") {
+        videoModel = &models[i] // → Gemini 3 Flash / Gemini 3 Vision / Gemini 3.1 Pro
+        break
+    }
+}
+
+// Filter image-capable (includes Claude + GPT vision + every Gemini).
+var imageModels []runjobs.Model
+for _, m := range models {
+    if m.AcceptsModality("image") {
+        imageModels = append(imageModels, m)
+    }
+}
+```
+
+`InputModalities` is **nil / empty** (not `[]string{}` with content) on capabilities where it doesn't apply — embedding, image generation, TTS, STT, etc. Treat absence as "field not applicable" and don't rely on `len(m.InputModalities) == 0` to mean "text only" outside of chat capabilities.
+
+Sending a content part the model doesn't accept (e.g. `video_url` to Claude) returns **400** at the gateway, before any tokens are billed:
+
+```
+{"error":{"message":"Claude does not accept video input. Use a Gemini model for video analysis.","type":"upstream_error","code":400}}
+```
+
+In streaming mode (`Stream: true`) the same error arrives as an SSE error chunk before `[DONE]`, so iteration surfaces it.
+
 ### Options schema — per-model field contract
 
 `m.OptionsSchema()` returns the typed view of the model's input contract: which fields are accepted, their bounds / enums / defaults, cross-field constraints (XOR groups, requires-all, pixel bounds), plus a `Catalog` of rich content (voices, emotions) that an enum alone can't express.
@@ -183,11 +227,26 @@ fmt.Printf("\nCost: $%.6f\n", cost)
 **Multi-modal** — pass `[]ContentPart` instead of a string:
 
 ```go
+// Image — Claude / GPT-4o / every Gemini accept this
 msg := runjobs.UserMessageParts(
     runjobs.TextPart("What's in this image?"),
     runjobs.ImagePart("https://example.com/photo.jpg", "high"),
 )
+
+// Video — Gemini 3.x only (check m.AcceptsModality("video") first)
+videoMsg := runjobs.UserMessageParts(
+    runjobs.TextPart("Summarise this clip"),
+    runjobs.VideoPart("https://example.com/clip.mp4"),
+)
+
+// Audio — Gemini 3.x only
+audioMsg := runjobs.UserMessageParts(
+    runjobs.TextPart("Transcribe and explain"),
+    runjobs.AudioPart("https://example.com/voice.wav"),
+)
 ```
+
+Pick the right model with `m.AcceptsModality("video")` first — unsupported variants are rejected server-side with a 400 (`Claude does not accept video input. Use a Gemini model…`). Constructors: `TextPart`, `ImagePart`, `VideoPart`, `AudioPart`.
 
 **Tool calling** — populate `Tools` + read `Choices[0].Message.ToolCalls`. Send the tool result back as `runjobs.ToolResultMessage(toolCallID, jsonOutput)`.
 
@@ -428,6 +487,8 @@ Network errors (DNS, socket reset, ctx cancel) propagate as the underlying trans
 |--------|---------|-----|
 | `m.HasCapabilityTag(id)` | `bool` | Filter by stable capability tag |
 | `m.CapabilityTags` | `[]Tag` | Iterate `{ID, Label}` for display chips |
+| `m.AcceptsModality("video")` | `bool` | Does the chat model accept this input modality? |
+| `m.InputModalities` | `[]string` | Raw modality list (chat-only field) |
 | `m.OptionsSchema()` | `*Schema, error` | Typed view of the model's input contract |
 | `m.AcceptsField(name)` | `bool` | Does the model accept this field? |
 | `m.RequiresField(name)` | `bool` | Is this field required? |
